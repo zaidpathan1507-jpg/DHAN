@@ -142,6 +142,7 @@ export default function AddTransactionModal({ open, onClose }) {
 
       {mode === "manual" || type === "income" ? (
         <TransactionForm
+          key={type}
           type={type}
           onSubmit={(payload) => createMutation.mutate({ ...payload, type })}
           submitting={createMutation.isPending}
@@ -166,6 +167,7 @@ export default function AddTransactionModal({ open, onClose }) {
           )}
           {ocrStage === "review" && (
             <TransactionForm
+              key={type}
               type={type}
               initialValues={initialValues}
               confidences={confidences}

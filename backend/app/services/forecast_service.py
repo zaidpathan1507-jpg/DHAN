@@ -98,9 +98,12 @@ def get_forecast(db: Session, business_id: int) -> dict:
                 backtest_errors.append(abs((actual - predicted) / actual))
     backtest_mape = round(statistics.mean(backtest_errors) * 100, 1) if backtest_errors else None
 
-    status_label = "HEALTHY" if expected_closing >= 0 and expected_next_net >= worst_case else "WATCH"
     if expected_closing < 0:
         status_label = "AT RISK"
+    elif worst_case < 0:
+        status_label = "WATCH"
+    else:
+        status_label = "HEALTHY"
 
     category_forecast = _forecast_by_category(db, business_id, today)
 

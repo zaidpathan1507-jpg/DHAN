@@ -107,8 +107,13 @@ def generate_insights(db: Session, business_id: int) -> list[dict]:
                 "method": "period comparison (last 30d vs previous 30d)",
             })
 
+    full_history_expenses = (
+        db.query(Transaction)
+        .filter(Transaction.business_id == business_id, Transaction.type == TransactionType.expense)
+        .all()
+    )
     category_groups: dict[str, list[float]] = {}
-    for txn in all_expenses:
+    for txn in full_history_expenses:
         category_groups.setdefault(txn.category, []).append(float(txn.amount))
 
     recent_anomalies = (

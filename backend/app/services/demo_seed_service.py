@@ -64,7 +64,7 @@ def seed_demo_data(db: Session, business_id: int) -> int:
     d = start
     while d <= today:
         if d.weekday() != 6:
-            daily_sales = rng.uniform(2200, 5200) * (1 + (today - d).days * -0.0008)
+            daily_sales = rng.uniform(4800, 9200) * (1 + (today - d).days * -0.0008)
             _add(db, business_id, TransactionType.income, max(daily_sales, 800),
                  rng.choice(INCOME_VENDORS), "Sales Revenue", d, rng.choice(["Cash", "UPI", "Bank Transfer"]))
             count += 1
