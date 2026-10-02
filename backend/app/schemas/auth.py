@@ -22,21 +22,30 @@ class TokenResponse(BaseModel):
 
 
 class BusinessOut(BaseModel):
-    id: int
+    id: str
     name: str
     business_type: str
     city: str
     opening_balance: float
+    upi_id: str | None = None
 
     class Config:
         from_attributes = True
 
 
 class UserOut(BaseModel):
-    id: int
+    id: str
     name: str
     phone: str
+    role: str = "owner"
+    two_factor: bool = False
+    report_email: str | None = None
+    weekly_report: bool = False
     business: BusinessOut
 
     class Config:
         from_attributes = True
+
+
+class BusinessPaymentUpdate(BaseModel):
+    upi_id: str | None = Field(default=None, max_length=80, pattern=r"^[\w.\-]{2,}@[A-Za-z]{2,}$")

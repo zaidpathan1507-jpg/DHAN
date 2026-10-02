@@ -1,127 +1,148 @@
-import { motion } from "framer-motion";
+import { MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import AuthShell from "../components/auth/AuthShell.jsx";
+import PasswordField from "../components/common/PasswordField.jsx";
+import api from "../lib/apiClient.js";
 import { useAuth } from "../lib/AuthContext.jsx";
+import { useI18n } from "../lib/i18n.jsx";
+
+const clean = (p) => p.replace(/\s+/g, "");
+
+// In demo mode (no WhatsApp provider configured) the code is shown on a simulated phone instead of being sent.
+function DemoCode({ code }) {
+  const { t } = useI18n();
+  return (
+    <div className="mt-5 rounded-2xl bg-[#ECE5DD] p-3">
+      <p className="mb-2 text-xs font-bold text-[#667781]">{t("auth.demoNote")}</p>
+      <p className="max-w-[90%] rounded-lg rounded-tl-none bg-white px-3 py-2 text-[14px] text-[#111B21] shadow-[0_1px_1px_rgba(0,0,0,0.13)]">{t("auth.demoCode", { code })}</p>
+    </div>
+  );
+}
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, verifyOtp } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
+  const [mode, setMode] = useState("password"); // password | otp
+  const [step, setStep] = useState("phone"); // phone | code
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [demoCode, setDemoCode] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const fail = (err) => setError(err.response?.status === 429 ? t("auth.locked") : err.response?.data?.detail || t("auth.genericError"));
+
+  const requestCode = async () => {
+    const { data } = await api.post("/auth/otp/request", { phone: clean(phone) });
+    setDemoCode(data.demo_code);
+    setStep("code");
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSubmitting(true);
     try {
-      await login(phone, password);
-      navigate("/dashboard");
+      if (step === "code") {
+        await verifyOtp(clean(phone), code);
+        navigate("/dashboard");
+      } else if (mode === "otp") {
+        await requestCode();
+      } else {
+        const second = await login(clean(phone), password);
+        if (second) {
+          setDemoCode(second.demo_code);
+          setStep("code");
+        } else navigate("/dashboard");
+      }
     } catch (err) {
-      setError(err.response?.data?.detail || "Something went wrong. Please try again.");
+      setError(step === "code" ? t("auth.codeWrong") : "");
+      if (step !== "code") fail(err);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const switchMode = (next) => {
+    setMode(next);
+    setStep("phone");
+    setError("");
+    setCode("");
+    setDemoCode(null);
+  };
+
+  const onCodeStep = step === "code";
+
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-surface">
-      <div className="hidden lg:flex flex-col justify-between bg-navy text-white p-12 relative overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="flex items-center gap-2"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-dhan-green text-white font-bold">
-            D
+    <AuthShell title1={t("auth.tagline1")} title2={t("auth.tagline2")} sub={t("auth.sub")}>
+      <h2 className="text-3xl font-extrabold tracking-tight text-ink">{onCodeStep ? t("auth.otpTitle") : t("auth.welcome")}</h2>
+      <p className="mt-1.5 text-[15px] text-ink-soft">{onCodeStep ? t("auth.otpSub", { phone: clean(phone) }) : t("auth.welcomeSub")}</p>
+
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        {!onCodeStep && (
+          <div>
+            <label htmlFor="phone" className="field-label">{t("auth.phone")}</label>
+            <div className="flex">
+              <span className="flex items-center rounded-l-xl border border-r-0 border-surface-strong bg-surface-muted px-3 text-base font-bold text-ink-soft">+91</span>
+              <input id="phone" required type="tel" inputMode="numeric" autoComplete="tel-national" value={phone} onChange={(e) => setPhone(e.target.value)} className="field rounded-l-none" placeholder="98765 43210" />
+            </div>
           </div>
-          <span className="text-xl font-bold tracking-tight">DHAN</span>
-        </motion.div>
+        )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
-          className="max-w-md"
-        >
-          <h1 className="text-4xl font-bold leading-tight">
-            Know your money.
-            <br />
-            Grow your business.
-          </h1>
-          <p className="mt-4 text-white/60 text-base leading-relaxed">
-            Turn everyday transactions into clear financial decisions.
-          </p>
-        </motion.div>
+        {!onCodeStep && mode === "password" && (
+          <PasswordField label={t("auth.password")} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+        )}
 
-        <p className="text-xs text-white/30">Hack2Ignite 2026 · PS ID FT-05</p>
+        {onCodeStep && (
+          <>
+            <div>
+              <label htmlFor="otp" className="field-label">{t("auth.code")}</label>
+              <input id="otp" required autoFocus inputMode="numeric" autoComplete="one-time-code" pattern="\d{4,8}" maxLength={8} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} className="field num text-center text-2xl font-extrabold tracking-[0.35em]" placeholder="••••••" />
+            </div>
+            {demoCode && <DemoCode code={demoCode} />}
+          </>
+        )}
 
-        <div className="pointer-events-none absolute -right-24 -bottom-24 h-80 w-80 rounded-full bg-dhan-green/10 blur-3xl" />
+        {error && <p role="alert" className="rounded-xl bg-loss-soft px-3.5 py-2.5 text-sm font-semibold text-loss">{error}</p>}
+
+        <button type="submit" disabled={submitting} className="btn-primary w-full">
+          {submitting ? t("auth.loggingIn") : onCodeStep ? t("auth.verify") : mode === "otp" ? t("auth.sendCode") : t("auth.login")}
+        </button>
+      </form>
+
+      <div className="mt-5 flex flex-col items-center gap-2 text-sm">
+        {onCodeStep ? (
+          <button
+            type="button"
+            className="link"
+            onClick={async () => {
+              setError("");
+              setCode("");
+              try {
+                if (mode === "otp") await requestCode();
+                else { setStep("phone"); setDemoCode(null); } // two-step login: re-enter the password to get a fresh code
+              } catch (err) {
+                fail(err);
+              }
+            }}
+          >
+            {t("auth.resend")}
+          </button>
+        ) : mode === "password" ? (
+          <button onClick={() => switchMode("otp")} type="button" className="link inline-flex items-center gap-1.5"><MessageCircle size={15} /> {t("auth.useCode")}</button>
+        ) : (
+          <button onClick={() => switchMode("password")} type="button" className="link">{t("auth.usePassword")}</button>
+        )}
       </div>
 
-      <div className="flex items-center justify-center p-6 sm:p-12">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.1 }}
-          className="w-full max-w-sm"
-        >
-          <div className="lg:hidden flex items-center gap-2 mb-10 justify-center">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-dhan-green text-white font-bold">
-              D
-            </div>
-            <span className="text-xl font-bold tracking-tight text-navy">DHAN</span>
-          </div>
-
-          <h2 className="text-2xl font-bold text-navy">Welcome back</h2>
-          <p className="mt-1 text-sm text-navy-soft">Log in to see where your money is going.</p>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-navy-soft/70 mb-1 block">
-                Phone
-              </label>
-              <input
-                required
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-xl border border-surface-border bg-surface-card px-3.5 py-2.5 text-sm text-navy focus:border-dhan-green outline-none"
-                placeholder="98765 43210"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-navy-soft/70 mb-1 block">
-                Password
-              </label>
-              <input
-                required
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-surface-border bg-surface-card px-3.5 py-2.5 text-sm text-navy focus:border-dhan-green outline-none"
-                placeholder="••••••••"
-              />
-            </div>
-
-            {error && <p className="text-sm text-danger">{error}</p>}
-
-            <button type="submit" disabled={submitting} className="btn-primary w-full">
-              {submitting ? "Logging in..." : "Login"}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-navy-soft">
-            New to DHAN?{" "}
-            <Link to="/register" className="font-semibold text-dhan-green hover:underline">
-              Create an account
-            </Link>
-          </p>
-        </motion.div>
-      </div>
-    </div>
+      <p className="mt-6 text-center text-[15px] text-ink-soft">
+        {t("auth.newHere")}{" "}
+        <Link to="/register" className="link">{t("auth.create")}</Link>
+      </p>
+    </AuthShell>
   );
 }

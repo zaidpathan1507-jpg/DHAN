@@ -8,9 +8,10 @@ history. The frontend must always render the disclaimer alongside the score.
 import statistics
 from datetime import date, timedelta
 
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from app.db.models import Business, Transaction, TransactionType
+from app.db.models import TransactionType
+from app.db.session import day, find_txns, get_business, to_obj
 
 OBSERVATION_DAYS = 90
 MIN_TRANSACTIONS = 30
@@ -35,22 +36,15 @@ def _band(score: float) -> str:
     return "NEEDS WORK"
 
 
-def get_credit_readiness(db: Session, business_id: int) -> dict:
-    business = db.get(Business, business_id)
+def get_credit_readiness(db: Database, business_id: int) -> dict:
+    business = get_business(db, business_id)
     today = date.today()
     window_start = today - timedelta(days=OBSERVATION_DAYS)
 
-    txns = (
-        db.query(Transaction)
-        .filter(Transaction.business_id == business_id, Transaction.txn_date > window_start, Transaction.txn_date <= today)
-        .all()
+    txns = find_txns(
+        db, {"business_id": business_id, "txn_date": {"$gt": day(window_start), "$lte": day(today)}}
     )
-    earliest_txn = (
-        db.query(Transaction)
-        .filter(Transaction.business_id == business_id)
-        .order_by(Transaction.txn_date.asc())
-        .first()
-    )
+    earliest_txn = to_obj(db.transactions.find_one({"business_id": business_id}, sort=[("txn_date", 1)]))
     days_of_history = (today - earliest_txn.txn_date).days if earliest_txn else 0
 
     if len(txns) < MIN_TRANSACTIONS or days_of_history < MIN_DAYS_OF_HISTORY:

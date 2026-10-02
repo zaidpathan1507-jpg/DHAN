@@ -4,7 +4,7 @@ export default function Skeleton({ className = "" }) {
 
 export function SkeletonCard({ lines = 3 }) {
   return (
-    <div className="card p-5 space-y-3">
+    <div className="card space-y-3 p-5" aria-busy="true">
       <Skeleton className="h-4 w-1/3" />
       <Skeleton className="h-8 w-1/2" />
       {Array.from({ length: lines }).map((_, i) => (

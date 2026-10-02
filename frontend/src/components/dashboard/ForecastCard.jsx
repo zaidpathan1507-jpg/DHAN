@@ -3,75 +3,82 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { formatINR } from "../../lib/constants.js";
+import { useI18n } from "../../lib/i18n.jsx";
 import EmptyState from "../common/EmptyState.jsx";
-import { SkeletonCard } from "../common/Skeleton.jsx";
+import Skeleton from "../common/Skeleton.jsx";
+import RangeBar from "../forecast/RangeBar.jsx";
 
-const STATUS_STYLES = {
-  HEALTHY: "bg-dhan-green-light text-dhan-green-dark",
-  WATCH: "bg-amber-light text-amber",
-  "AT RISK": "bg-danger-light text-danger",
+export const STATUS_STYLES = {
+  HEALTHY: "bg-gain-soft text-gain-ink",
+  WATCH: "bg-gold-100 text-gold-700",
+  "AT RISK": "bg-loss-soft text-loss",
 };
 
 export default function ForecastCard({ data, loading }) {
   const [showHow, setShowHow] = useState(false);
+  const { t } = useI18n();
 
-  if (loading) return <SkeletonCard lines={3} />;
+  if (loading) return <Skeleton className="h-72 w-full rounded-2xl" />;
 
   if (!data || data.insufficient_history) {
     return (
-      <div className="card p-5 md:p-6 h-full">
-        <h3 className="text-base font-semibold text-navy">30-Day Forecast</h3>
-        <EmptyState
-          icon={TrendingUp}
-          title="Not enough history yet."
-          body={data?.message || "Add transactions for a more reliable forecast."}
-        />
+      <div className="card h-full p-5 md:p-6">
+        <h2 className="text-lg font-extrabold text-ink">{t("dash.forecast")}</h2>
+        <EmptyState icon={TrendingUp} title={t("dash.noHistory")} body={data?.message || t("dash.noHistoryBody")} />
       </div>
     );
   }
 
   return (
-    <div className="card p-5 md:p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-navy">30-Day Forecast</h3>
-        <Link to="/forecast" className="text-xs font-medium text-dhan-green hover:underline">
-          View details
+    <div className="card flex h-full flex-col p-5 md:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-extrabold text-ink">{t("dash.forecast")}</h2>
+        <Link to="/forecast" className="link text-sm">
+          {t("common.viewDetails")}
         </Link>
       </div>
 
-      <p className="mt-3 text-xs text-navy-soft">Expected closing balance</p>
-      <p className="text-[28px] font-bold text-navy tabular-nums">{formatINR(data.expected_closing_balance)}</p>
-      <span className={`mt-1 inline-flex w-fit rounded-md px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[data.status]}`}>
-        {data.status}
-      </span>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <div>
-          <p className="text-xs text-navy-soft/70">Best case</p>
-          <p className="font-semibold text-dhan-green tabular-nums">{formatINR(data.best_case)}</p>
+          <p className="text-sm font-semibold text-ink-muted">{t("dash.expectedClose")}</p>
+          <p className="num text-[30px] font-extrabold leading-tight text-ink">{formatINR(data.expected_closing_balance)}</p>
         </div>
-        <div>
-          <p className="text-xs text-navy-soft/70">Worst case</p>
-          <p className="font-semibold text-danger tabular-nums">{formatINR(data.worst_case)}</p>
-        </div>
+        <span className={`chip ${STATUS_STYLES[data.status]}`}>{t(`status.${data.status}`)}</span>
       </div>
 
-      <p className="mt-3 text-xs text-navy-soft/60">
-        Based on your last {data.assumptions.periods_used} rolling periods.
-        {data.assumptions.backtest_mape_pct !== null && ` Backtest error: ${data.assumptions.backtest_mape_pct}%.`}
+      <div className="mt-5">
+        <RangeBar
+          current={data.current_cash_balance}
+          worst={data.worst_case}
+          expected={data.expected_closing_balance}
+          best={data.best_case}
+          status={data.status}
+        />
+      </div>
+
+      <p className="mt-4 text-sm text-ink-muted">
+        {t("dash.basedOn", { n: data.assumptions.periods_used })}
+        {data.assumptions.backtest_mape_pct !== null && ` ${t("dash.backtest", { pct: data.assumptions.backtest_mape_pct })}`}
       </p>
 
       <button
         onClick={() => setShowHow((s) => !s)}
-        className="mt-3 flex items-center gap-1 text-xs font-medium text-navy-soft hover:text-navy"
+        aria-expanded={showHow}
+        className="mt-2 inline-flex min-h-[40px] w-fit items-center gap-1 text-sm font-bold text-ink-soft hover:text-ink"
       >
-        How is this calculated? <ChevronDown size={13} className={`transition-transform ${showHow ? "rotate-180" : ""}`} />
+        {t("dash.how")} <ChevronDown size={15} className={`transition-transform ${showHow ? "rotate-180" : ""}`} />
       </button>
       {showHow && (
-        <div className="mt-2 rounded-xl bg-surface-muted p-3 text-xs text-navy-soft space-y-1 animate-fade-up">
-          <p>Method: {data.assumptions.method}</p>
-          <p>Weights: {data.assumptions.weights.join(" / ")}</p>
-          <p>Data used: {data.assumptions.data_used}</p>
+        <div className="animate-fade-up space-y-1 rounded-xl bg-surface p-3.5 text-sm text-ink-soft">
+          <p>
+            <span className="font-bold text-ink">{t("dash.method")}:</span> {data.assumptions.method}
+          </p>
+          <p>
+            <span className="font-bold text-ink">{t("dash.weights")}:</span> {data.assumptions.weights.join(" / ")}
+          </p>
+          <p>
+            <span className="font-bold text-ink">{t("dash.dataUsed")}:</span> {data.assumptions.data_used}
+          </p>
         </div>
       )}
     </div>

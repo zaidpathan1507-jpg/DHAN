@@ -7,9 +7,10 @@ so the UI never presents a number without explaining where it came from.
 import statistics
 from datetime import date, timedelta
 
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from app.db.models import Transaction, TransactionType
+from app.db.models import TransactionType
+from app.db.session import day, find_txns
 
 ANOMALY_Z_THRESHOLD = 3.5
 MIN_SAMPLES_FOR_ANOMALY = 5
@@ -23,19 +24,13 @@ def _robust_z_scores(amounts: list[float]) -> tuple[float, float, list[float]]:
     return median, mad, z_scores
 
 
-def flag_anomaly_for_new_transaction(db: Session, business_id: int, txn: Transaction) -> bool:
+def flag_anomaly_for_new_transaction(db: Database, business_id: int, txn) -> bool:
     if txn.type != TransactionType.expense:
         return False
 
-    history = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.category == txn.category,
-            Transaction.type == TransactionType.expense,
-            Transaction.id != txn.id,
-        )
-        .all()
+    history = find_txns(
+        db,
+        {"business_id": business_id, "category": txn.category, "type": TransactionType.expense.value},
     )
     if len(history) < MIN_SAMPLES_FOR_ANOMALY:
         return False
@@ -46,19 +41,18 @@ def flag_anomaly_for_new_transaction(db: Session, business_id: int, txn: Transac
     return z > ANOMALY_Z_THRESHOLD
 
 
-def generate_insights(db: Session, business_id: int) -> list[dict]:
+def generate_insights(db: Database, business_id: int) -> list[dict]:
     today = date.today()
     current_start = today - timedelta(days=30)
     previous_start = today - timedelta(days=60)
 
-    all_expenses = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.type == TransactionType.expense,
-            Transaction.txn_date >= previous_start,
-        )
-        .all()
+    all_expenses = find_txns(
+        db,
+        {
+            "business_id": business_id,
+            "type": TransactionType.expense.value,
+            "txn_date": {"$gte": day(previous_start)},
+        },
     )
 
     insights: list[dict] = []
@@ -107,24 +101,21 @@ def generate_insights(db: Session, business_id: int) -> list[dict]:
                 "method": "period comparison (last 30d vs previous 30d)",
             })
 
-    full_history_expenses = (
-        db.query(Transaction)
-        .filter(Transaction.business_id == business_id, Transaction.type == TransactionType.expense)
-        .all()
+    full_history_expenses = find_txns(
+        db, {"business_id": business_id, "type": TransactionType.expense.value}
     )
     category_groups: dict[str, list[float]] = {}
     for txn in full_history_expenses:
         category_groups.setdefault(txn.category, []).append(float(txn.amount))
 
-    recent_anomalies = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.type == TransactionType.expense,
-            Transaction.is_anomaly.is_(True),
-            Transaction.txn_date >= current_start,
-        )
-        .all()
+    recent_anomalies = find_txns(
+        db,
+        {
+            "business_id": business_id,
+            "type": TransactionType.expense.value,
+            "is_anomaly": True,
+            "txn_date": {"$gte": day(current_start)},
+        },
     )
 
     for txn in recent_anomalies:

@@ -10,9 +10,14 @@ import random
 import statistics
 from datetime import date, timedelta
 
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
-from app.db.models import Transaction, TransactionSource, TransactionType
+from bson import ObjectId
+from pymongo import UpdateOne
+from pymongo.database import Database
+
+from app.db.models import TransactionSource, TransactionType
+from app.db.session import day, find_txns
 
 DEMO_DAYS = 180
 
@@ -31,31 +36,32 @@ VENDORS = {
 INCOME_VENDORS = ["Retail Sales", "Wholesale Order", "Online Orders"]
 
 
-def _add(db: Session, business_id: int, txn_type, amount, vendor, category, txn_date, payment_mode, gstin=None, description=None):
-    db.add(Transaction(
-        business_id=business_id,
-        type=txn_type,
-        amount=round(amount, 2),
-        vendor=vendor,
-        category=category,
-        txn_date=txn_date,
-        payment_mode=payment_mode,
-        description=description,
-        gstin=gstin,
-        source=TransactionSource.DEMO,
-    ))
+def _add(docs: list, business_id: str, txn_type, amount, vendor, category, txn_date, payment_mode, gstin=None, description=None):
+    docs.append({
+        "business_id": business_id,
+        "type": txn_type.value,
+        "amount": round(amount, 2),
+        "vendor": vendor,
+        "category": category,
+        "txn_date": day(txn_date),
+        "payment_mode": payment_mode,
+        "description": description,
+        "gstin": gstin,
+        "source": TransactionSource.DEMO.value,
+        "is_anomaly": False,
+        "category_method": None,
+        "category_confidence": None,
+        "created_at": datetime.now(timezone.utc),
+    })
 
 
-def reset_demo_data(db: Session, business_id: int) -> None:
-    db.query(Transaction).filter(
-        Transaction.business_id == business_id,
-        Transaction.source == TransactionSource.DEMO,
-    ).delete()
-    db.commit()
+def reset_demo_data(db: Database, business_id: str) -> None:
+    db.transactions.delete_many({"business_id": business_id, "source": TransactionSource.DEMO.value})
 
 
-def seed_demo_data(db: Session, business_id: int) -> int:
+def seed_demo_data(db: Database, business_id: str) -> int:
     reset_demo_data(db, business_id)
+    docs: list[dict] = []
     rng = random.Random(42)
     today = date.today()
     start = today - timedelta(days=DEMO_DAYS)
@@ -65,30 +71,30 @@ def seed_demo_data(db: Session, business_id: int) -> int:
     while d <= today:
         if d.weekday() != 6:
             daily_sales = rng.uniform(4800, 9200) * (1 + (today - d).days * -0.0008)
-            _add(db, business_id, TransactionType.income, max(daily_sales, 800),
+            _add(docs, business_id, TransactionType.income, max(daily_sales, 800),
                  rng.choice(INCOME_VENDORS), "Sales Revenue", d, rng.choice(["Cash", "UPI", "Bank Transfer"]))
             count += 1
 
         if d.weekday() in (1, 4):
-            _add(db, business_id, TransactionType.expense, rng.uniform(3500, 9500),
+            _add(docs, business_id, TransactionType.expense, rng.uniform(3500, 9500),
                  rng.choice(VENDORS["Raw Material & Stock"]), "Raw Material & Stock", d, "Bank Transfer",
                  gstin="27AAAPL1234C1Z5")
             count += 1
 
         if d.weekday() in (0, 2, 3, 5):
-            _add(db, business_id, TransactionType.expense, rng.uniform(150, 650),
+            _add(docs, business_id, TransactionType.expense, rng.uniform(150, 650),
                  rng.choice(VENDORS["Transport & Fuel"]), "Transport & Fuel", d, "Cash")
             count += 1
 
         if d.weekday() in (0, 3):
-            _add(db, business_id, TransactionType.expense, rng.uniform(80, 320),
+            _add(docs, business_id, TransactionType.expense, rng.uniform(80, 320),
                  rng.choice(VENDORS["Food & Refreshments"]), "Food & Refreshments", d, "Cash")
             count += 1
 
         if d.day == 1:
-            _add(db, business_id, TransactionType.expense, rng.uniform(18000, 24000),
+            _add(docs, business_id, TransactionType.expense, rng.uniform(18000, 24000),
                  VENDORS["Salaries & Wages"][0], "Salaries & Wages", d, "Bank Transfer")
-            _add(db, business_id, TransactionType.expense, 8000,
+            _add(docs, business_id, TransactionType.expense, 8000,
                  VENDORS["Rent"][0], "Rent", d, "Bank Transfer")
             count += 2
 
@@ -97,48 +103,45 @@ def seed_demo_data(db: Session, business_id: int) -> int:
             utility_base = rng.uniform(1800, 2600)
             if days_ago < 30:
                 utility_base += 2360
-            _add(db, business_id, TransactionType.expense, utility_base,
+            _add(docs, business_id, TransactionType.expense, utility_base,
                  rng.choice(VENDORS["Utilities"]), "Utilities", d, "UPI")
             count += 1
 
         if d.day == 15 and rng.random() < 0.6:
-            _add(db, business_id, TransactionType.expense, rng.uniform(1200, 3500),
+            _add(docs, business_id, TransactionType.expense, rng.uniform(1200, 3500),
                  rng.choice(VENDORS["Marketing"]), "Marketing", d, "UPI")
             count += 1
 
         if d.day == 20 and rng.random() < 0.4:
-            _add(db, business_id, TransactionType.expense, rng.uniform(900, 4200),
+            _add(docs, business_id, TransactionType.expense, rng.uniform(900, 4200),
                  rng.choice(VENDORS["Repairs & Maintenance"]), "Repairs & Maintenance", d, "Cash")
             count += 1
 
         if d.day == 10 and d.month % 3 == 0:
-            _add(db, business_id, TransactionType.expense, rng.uniform(3000, 7000),
+            _add(docs, business_id, TransactionType.expense, rng.uniform(3000, 7000),
                  "GST Payment", "Taxes & Fees", d, "Bank Transfer")
             count += 1
 
         d += timedelta(days=1)
 
     one_off_date = today - timedelta(days=3)
-    _add(db, business_id, TransactionType.expense, 42300,
+    _add(docs, business_id, TransactionType.expense, 42300,
          "MSEB Electricity", "Utilities", one_off_date, "Bank Transfer",
          description="One-time equipment repair surcharge")
     count += 1
 
-    db.commit()
+    db.transactions.insert_many(docs)
     _apply_anomaly_flags(db, business_id)
     return count
 
 
-def _apply_anomaly_flags(db: Session, business_id: int) -> None:
-    expenses = (
-        db.query(Transaction)
-        .filter(Transaction.business_id == business_id, Transaction.type == TransactionType.expense)
-        .all()
-    )
-    by_category: dict[str, list[Transaction]] = {}
+def _apply_anomaly_flags(db: Database, business_id: str) -> None:
+    expenses = find_txns(db, {"business_id": business_id, "type": TransactionType.expense.value})
+    by_category: dict[str, list] = {}
     for t in expenses:
         by_category.setdefault(t.category, []).append(t)
 
+    updates = []
     for category, txns in by_category.items():
         if len(txns) < 5:
             continue
@@ -147,5 +150,6 @@ def _apply_anomaly_flags(db: Session, business_id: int) -> None:
         mad = statistics.median([abs(a - median) for a in amounts]) or 1e-9
         for t in txns:
             z = 0.6745 * (float(t.amount) - median) / mad
-            t.is_anomaly = z > 3.5
-    db.commit()
+            updates.append(UpdateOne({"_id": ObjectId(t.id)}, {"$set": {"is_anomaly": z > 3.5}}))
+    if updates:
+        db.transactions.bulk_write(updates)

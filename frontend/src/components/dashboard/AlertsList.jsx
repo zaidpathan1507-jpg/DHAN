@@ -1,24 +1,27 @@
 import { Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { useI18n } from "../../lib/i18n.jsx";
 import EmptyState from "../common/EmptyState.jsx";
+import Skeleton from "../common/Skeleton.jsx";
 import InsightCard from "../insights/InsightCard.jsx";
-import { SkeletonCard } from "../common/Skeleton.jsx";
 
 export default function AlertsList({ data, loading }) {
-  if (loading) return <SkeletonCard lines={2} />;
+  const { t } = useI18n();
 
   return (
-    <div className="card p-5 md:p-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-navy">Insights &amp; Alerts</h3>
-        <Link to="/insights" className="text-xs font-medium text-dhan-green hover:underline">
-          View all
+    <div className="card h-full p-5 md:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-extrabold text-ink">{t("dash.alerts")}</h2>
+        <Link to="/insights" className="link text-sm">
+          {t("common.viewAll")}
         </Link>
       </div>
 
-      {!data?.length ? (
-        <EmptyState icon={Sparkles} title="No insights yet." body="DHAN will surface patterns here once you have more activity." />
+      {loading ? (
+        <Skeleton className="mt-4 h-48 w-full" />
+      ) : !data?.length ? (
+        <EmptyState icon={Sparkles} title={t("dash.alertsEmpty")} body={t("dash.alertsEmptyBody")} />
       ) : (
         <div className="mt-4 space-y-3">
           {data.slice(0, 3).map((insight) => (

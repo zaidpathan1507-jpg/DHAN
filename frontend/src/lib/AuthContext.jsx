@@ -30,18 +30,28 @@ export function AuthProvider({ children }) {
     }
   }, [token, fetchMe]);
 
+  const acceptToken = async (accessToken) => {
+    localStorage.setItem("dhan_token", accessToken);
+    setToken(accessToken);
+    await fetchMe();
+  };
+
+  // Resolves to null when signed in, or to { otp_required, phone, demo_code } when a second step is needed.
   const login = async (phone, password) => {
     const { data } = await api.post("/auth/login", { phone, password });
-    localStorage.setItem("dhan_token", data.access_token);
-    setToken(data.access_token);
-    await fetchMe();
+    if (data.otp_required) return data;
+    await acceptToken(data.access_token);
+    return null;
+  };
+
+  const verifyOtp = async (phone, code) => {
+    const { data } = await api.post("/auth/otp/verify", { phone, code });
+    await acceptToken(data.access_token);
   };
 
   const register = async (payload) => {
     const { data } = await api.post("/auth/register", payload);
-    localStorage.setItem("dhan_token", data.access_token);
-    setToken(data.access_token);
-    await fetchMe();
+    await acceptToken(data.access_token);
   };
 
   const logout = () => {
@@ -51,7 +61,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ token, user, loading, login, verifyOtp, register, logout, refreshUser: fetchMe }}>
       {children}
     </AuthContext.Provider>
   );

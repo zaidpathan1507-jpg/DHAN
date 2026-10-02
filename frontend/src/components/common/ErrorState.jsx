@@ -1,15 +1,19 @@
 import { AlertCircle, RefreshCw } from "lucide-react";
 
-export default function ErrorState({ title = "Can't reach DHAN right now.", onRetry }) {
+import { useI18n } from "../../lib/i18n.jsx";
+
+export default function ErrorState({ title, onRetry }) {
+  const { t } = useI18n();
   return (
-    <div className="flex flex-col items-center justify-center text-center py-12 px-6">
-      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-light text-danger">
-        <AlertCircle size={22} strokeWidth={1.75} />
+    <div role="alert" className="flex flex-col items-center justify-center px-6 py-12 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-loss-soft text-loss">
+        <AlertCircle size={24} strokeWidth={1.75} />
       </div>
-      <p className="text-sm font-semibold text-navy">{title}</p>
+      <p className="text-base font-bold text-ink">{title || t("common.error")}</p>
+      <p className="mt-1 text-sm text-ink-soft">{t("common.errorBody")}</p>
       {onRetry && (
-        <button onClick={onRetry} className="btn-secondary mt-4">
-          <RefreshCw size={14} /> Retry
+        <button onClick={onRetry} className="btn-secondary mt-5">
+          <RefreshCw size={15} /> {t("common.retry")}
         </button>
       )}
     </div>

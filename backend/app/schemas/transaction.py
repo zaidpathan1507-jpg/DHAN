@@ -28,7 +28,7 @@ class TransactionUpdate(BaseModel):
 
 
 class TransactionOut(BaseModel):
-    id: int
+    id: str
     type: TransactionType
     amount: float
     vendor: str
@@ -50,3 +50,17 @@ class TransactionOut(BaseModel):
 class TransactionListOut(BaseModel):
     total: int
     items: list[TransactionOut]
+
+
+class ImportRow(BaseModel):
+    type: TransactionType
+    amount: float = Field(gt=0)
+    vendor: str = Field(min_length=1, max_length=200)
+    category: str
+    txn_date: date
+    payment_mode: str = "Bank Transfer"
+    description: str | None = None
+
+
+class ImportRequest(BaseModel):
+    rows: list[ImportRow] = Field(max_length=5000)

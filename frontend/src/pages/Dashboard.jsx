@@ -1,117 +1,116 @@
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
+import BriefCard from "../components/dashboard/BriefCard.jsx";
+import CrunchBanner from "../components/dashboard/CrunchBanner.jsx";
+import MoneyWaitingCard from "../components/dashboard/MoneyWaitingCard.jsx";
 import AlertsList from "../components/dashboard/AlertsList.jsx";
+import CashHero from "../components/dashboard/CashHero.jsx";
 import CreditScoreCard from "../components/dashboard/CreditScoreCard.jsx";
 import ForecastCard from "../components/dashboard/ForecastCard.jsx";
-import KpiCard from "../components/dashboard/KpiCard.jsx";
 import SpendingBreakdown from "../components/dashboard/SpendingBreakdown.jsx";
+import StatStrip from "../components/dashboard/StatStrip.jsx";
 import TopVendors from "../components/dashboard/TopVendors.jsx";
-import TrendChart from "../components/dashboard/TrendChart.jsx";
-import AddTransactionModal from "../components/transactions/AddTransactionModal.jsx";
+import TrendChart, { PeriodToggle } from "../components/dashboard/TrendChart.jsx";
 import api from "../lib/apiClient.js";
 import { useAuth } from "../lib/AuthContext.jsx";
+import { useCanEdit } from "../lib/useRole.js";
+import { useI18n } from "../lib/i18n.jsx";
 
-function greeting() {
+function greetingKey() {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return "dash.greetMorning";
+  if (h < 17) return "dash.greetAfternoon";
+  return "dash.greetEvening";
 }
+
+// One orchestrated entrance for the page: sections rise in sequence, then everything is static.
+const rise = (i) => ({ className: "animate-fade-up", style: { animationDelay: `${i * 70}ms` } });
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { t, formatDate } = useI18n();
+  const { openAdd } = useOutletContext();
+  const canEdit = useCanEdit();
   const [period, setPeriod] = useState("30d");
-  const [addOpen, setAddOpen] = useState(false);
 
-  const overview = useQuery({
-    queryKey: ["dashboard-overview", period],
-    queryFn: () => api.get(`/dashboard/overview?period=${period}`).then((r) => r.data),
-  });
-  const cashflow = useQuery({
-    queryKey: ["dashboard-cashflow", period],
-    queryFn: () => api.get(`/dashboard/cashflow?period=${period}`).then((r) => r.data),
-  });
-  const spendingMix = useQuery({
-    queryKey: ["dashboard-spending-mix"],
-    queryFn: () => api.get("/dashboard/spending-mix").then((r) => r.data),
-  });
-  const topVendors = useQuery({
-    queryKey: ["dashboard-top-vendors"],
-    queryFn: () => api.get("/dashboard/top-vendors").then((r) => r.data),
-  });
-  const forecast = useQuery({
-    queryKey: ["forecast"],
-    queryFn: () => api.get("/forecast").then((r) => r.data),
-  });
-  const credit = useQuery({
-    queryKey: ["credit-readiness"],
-    queryFn: () => api.get("/credit-readiness").then((r) => r.data),
-  });
-  const insights = useQuery({
-    queryKey: ["insights"],
-    queryFn: () => api.get("/insights").then((r) => r.data),
-  });
-
-  const o = overview.data;
+  const get = (path) => api.get(path).then((r) => r.data);
+  const overview = useQuery({ queryKey: ["dashboard-overview", period], queryFn: () => get(`/dashboard/overview?period=${period}`) });
+  const cashflow = useQuery({ queryKey: ["dashboard-cashflow", period], queryFn: () => get(`/dashboard/cashflow?period=${period}`) });
+  const spendingMix = useQuery({ queryKey: ["dashboard-spending-mix", period], queryFn: () => get(`/dashboard/spending-mix?period=${period}`) });
+  const topVendors = useQuery({ queryKey: ["dashboard-top-vendors", period], queryFn: () => get(`/dashboard/top-vendors?period=${period}`) });
+  const forecast = useQuery({ queryKey: ["forecast"], queryFn: () => get("/forecast") });
+  const credit = useQuery({ queryKey: ["credit-readiness"], queryFn: () => get("/credit-readiness") });
+  const insights = useQuery({ queryKey: ["insights"], queryFn: () => get("/insights") });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <p className="text-sm text-navy-soft">
-            {greeting()}, {user?.name?.split(" ")[0]}
+    <div className="space-y-5 md:space-y-6">
+      <div {...rise(0)} className="flex flex-wrap items-end justify-between gap-4 animate-fade-up">
+        <div className="min-w-0">
+          <p className="text-[15px] font-semibold text-ink-soft">
+            {t(greetingKey())}, {user?.name?.split(" ")[0]}
           </p>
-          <h1 className="text-2xl md:text-[32px] font-bold text-navy mt-0.5">{user?.business?.name}</h1>
-          <p className="text-xs text-navy-soft/60 mt-0.5">
-            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-ink md:text-[32px] md:leading-tight">
+            {user?.business?.name}
+          </h1>
+          <p className="mt-0.5 text-sm text-ink-muted">
+            {formatDate(new Date(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
-        <button onClick={() => setAddOpen(true)} className="btn-primary hidden md:inline-flex">
-          <Plus size={16} /> Add Transaction
-        </button>
-      </div>
-
-      <div>
-        <h2 className="text-sm font-semibold text-navy-soft/70 mb-3">FINANCIAL OVERVIEW</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard label="Income" amount={o?.income.amount} pctChange={o?.income.pct_change} sparkline={o?.income.sparkline} />
-          <KpiCard
-            label="Expenses"
-            amount={o?.expenses.amount}
-            pctChange={o?.expenses.pct_change}
-            sparkline={o?.expenses.sparkline}
-            tone="danger"
-          />
-          <KpiCard label="Net" amount={o?.net.amount} pctChange={o?.net.pct_change} sparkline={o?.net.sparkline} />
-          <KpiCard
-            label="Cash Balance"
-            amount={o?.cash_balance.amount}
-            pctChange={o?.cash_balance.pct_change}
-            sparkline={o?.cash_balance.sparkline}
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <PeriodToggle period={period} onChange={setPeriod} />
+          {canEdit && <button onClick={openAdd} className="btn-primary hidden md:inline-flex">
+            <Plus size={18} strokeWidth={2.5} /> {t("dash.add")}
+          </button>}
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <TrendChart data={cashflow.data} period={period} onPeriodChange={setPeriod} loading={cashflow.isLoading} />
+      <div {...rise(1)} className="space-y-5 md:space-y-6">
+        <CrunchBanner />
+        <CashHero overview={overview.data} forecast={forecast.data} insights={insights.data} />
+      </div>
+
+      <div {...rise(2)}>
+        <StatStrip overview={overview.data} />
+      </div>
+
+      <div {...rise(3)} className="grid animate-fade-up gap-5 lg:grid-cols-12 md:gap-6">
+        <div className="lg:col-span-7">
+          <BriefCard />
         </div>
-        <SpendingBreakdown data={spendingMix.data} loading={spendingMix.isLoading} />
+        <div className="lg:col-span-5">
+          <MoneyWaitingCard />
+        </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <TopVendors data={topVendors.data} loading={topVendors.isLoading} />
-        <ForecastCard data={forecast.data} loading={forecast.isLoading} />
+      <div {...rise(3)} className="grid animate-fade-up gap-5 lg:grid-cols-12 md:gap-6">
+        <div className="lg:col-span-8">
+          <TrendChart data={cashflow.data} loading={cashflow.isLoading} />
+        </div>
+        <div className="lg:col-span-4">
+          <SpendingBreakdown data={spendingMix.data} loading={spendingMix.isLoading} />
+        </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <AlertsList data={insights.data} loading={insights.isLoading} />
-        <CreditScoreCard data={credit.data} loading={credit.isLoading} />
+      <div {...rise(4)} className="grid animate-fade-up gap-5 lg:grid-cols-12 md:gap-6">
+        <div className="lg:col-span-7">
+          <AlertsList data={insights.data} loading={insights.isLoading} />
+        </div>
+        <div className="lg:col-span-5">
+          <TopVendors data={topVendors.data} loading={topVendors.isLoading} />
+        </div>
       </div>
 
-      <AddTransactionModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <div {...rise(5)} className="grid animate-fade-up gap-5 lg:grid-cols-12 md:gap-6">
+        <div className="lg:col-span-7">
+          <ForecastCard data={forecast.data} loading={forecast.isLoading} />
+        </div>
+        <div className="lg:col-span-5">
+          <CreditScoreCard data={credit.data} loading={credit.isLoading} />
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,82 +1,104 @@
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Receipt, Search } from "lucide-react";
+import { FileUp, Plus, Receipt, Search } from "lucide-react";
 import { useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
-import TransactionDrawer from "../components/transactions/TransactionDrawer.jsx";
-import TransactionTable from "../components/transactions/TransactionTable.jsx";
-import AddTransactionModal from "../components/transactions/AddTransactionModal.jsx";
 import EmptyState from "../components/common/EmptyState.jsx";
 import ErrorState from "../components/common/ErrorState.jsx";
+import PageHeader from "../components/common/PageHeader.jsx";
 import { SkeletonCard } from "../components/common/Skeleton.jsx";
+import ImportModal from "../components/transactions/ImportModal.jsx";
+import TransactionDrawer from "../components/transactions/TransactionDrawer.jsx";
+import TransactionTable from "../components/transactions/TransactionTable.jsx";
 import api from "../lib/apiClient.js";
 import { EXPENSE_CATEGORIES, formatINR, INCOME_CATEGORIES } from "../lib/constants.js";
+import { useI18n } from "../lib/i18n.jsx";
+import { useCanEdit } from "../lib/useRole.js";
 
 export default function Transactions() {
+  const { t, tr } = useI18n();
+  const { openAdd } = useOutletContext();
+  const canEdit = useCanEdit();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [type, setType] = useState("");
   const [selected, setSelected] = useState(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const query = useQuery({
     queryKey: ["transactions", search, category, type],
     queryFn: () =>
       api
         .get("/transactions", {
-          params: {
-            q: search || undefined,
-            category: category || undefined,
-            type: type || undefined,
-          },
+          params: { q: search || undefined, category: category || undefined, type: type || undefined },
         })
         .then((r) => r.data),
   });
 
-  const total = query.data?.items?.reduce(
-    (sum, t) => sum + (t.type === "income" ? t.amount : -t.amount),
-    0
-  );
+  const net = query.data?.items?.reduce((sum, x) => sum + (x.type === "income" ? x.amount : -x.amount), 0);
+
+  const types = [
+    { k: "", label: t("txn.allTypes") },
+    { k: "income", label: t("common.income") },
+    { k: "expense", label: t("common.expense") },
+  ];
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl md:text-[32px] font-bold text-navy">Transactions</h1>
-          {query.data && <p className="text-sm text-navy-soft mt-0.5">Net: {formatINR(total)}</p>}
-        </div>
-        <button onClick={() => setAddOpen(true)} className="btn-primary">
-          <Plus size={16} /> Add Transaction
-        </button>
-      </div>
+      <PageHeader
+        title={t("txn.title")}
+        subtitle={query.data ? t("txn.net", { amount: formatINR(net) }) : undefined}
+        action={
+          canEdit && <div className="flex flex-wrap gap-2">
+            <button onClick={() => setImportOpen(true)} className="btn-secondary">
+              <FileUp size={17} /> {t("imp.btn")}
+            </button>
+            <button onClick={openAdd} className="btn-primary hidden md:inline-flex">
+              <Plus size={18} strokeWidth={2.5} /> {t("txn.add")}
+            </button>
+          </div>
+        }
+      />
 
-      <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-soft/50" />
+      <div className="card flex flex-wrap items-center gap-3 p-3 md:p-4">
+        <div className="relative min-w-[200px] flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input
+            type="search"
+            aria-label={t("txn.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search vendor..."
-            className="w-full rounded-xl border border-surface-border bg-surface-card pl-9 pr-3 py-2 text-sm text-navy focus:border-dhan-green outline-none"
+            placeholder={t("txn.search")}
+            className="field pl-10"
           />
         </div>
+
+        <div role="radiogroup" aria-label={t("txn.status")} className="inline-flex rounded-xl bg-surface-muted p-1">
+          {types.map(({ k, label }) => (
+            <button
+              key={k}
+              role="radio"
+              aria-checked={type === k}
+              onClick={() => setType(k)}
+              className={`min-h-[38px] rounded-lg px-3.5 text-sm font-bold transition-colors ${
+                type === k ? "bg-surface-card text-ink shadow-subtle" : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="rounded-xl border border-surface-border bg-surface-card px-3 py-2 text-sm text-navy focus:border-dhan-green outline-none"
-        >
-          <option value="">All types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-        </select>
-        <select
+          aria-label={t("txn.category")}
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="rounded-xl border border-surface-border bg-surface-card px-3 py-2 text-sm text-navy focus:border-dhan-green outline-none"
+          className="field w-full sm:w-auto sm:min-w-[200px]"
         >
-          <option value="">All categories</option>
+          <option value="">{t("txn.allCategories")}</option>
           {[...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => (
             <option key={c} value={c}>
-              {c}
+              {tr("cat", c)}
             </option>
           ))}
         </select>
@@ -90,12 +112,14 @@ export default function Transactions() {
         ) : !query.data?.items?.length ? (
           <EmptyState
             icon={Receipt}
-            title="No financial activity recorded."
-            body="Add your first transaction to get started."
+            title={t("txn.empty")}
+            body={t("txn.emptyBody")}
             action={
-              <button onClick={() => setAddOpen(true)} className="btn-primary">
-                <Plus size={15} /> Add your first transaction
-              </button>
+              canEdit && (
+                <button onClick={openAdd} className="btn-primary">
+                  <Plus size={17} strokeWidth={2.5} /> {t("txn.addFirst")}
+                </button>
+              )
             }
           />
         ) : (
@@ -103,8 +127,8 @@ export default function Transactions() {
         )}
       </div>
 
+      <ImportModal open={importOpen} onClose={() => setImportOpen(false)} />
       <TransactionDrawer transaction={selected} onClose={() => setSelected(null)} />
-      <AddTransactionModal open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
   );
 }

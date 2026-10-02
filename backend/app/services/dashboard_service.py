@@ -1,13 +1,14 @@
 from datetime import date, timedelta
 
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from app.db.models import Business, Transaction, TransactionType
+from app.db.models import TransactionType
+from app.db.session import day, find_txns, get_business
 
 PERIOD_DAYS = {"today": 1, "7d": 7, "30d": 30, "month": 30}
 
 
-def _sum_amounts(txns: list[Transaction], txn_type: TransactionType) -> float:
+def _sum_amounts(txns: list, txn_type: TransactionType) -> float:
     return sum(float(t.amount) for t in txns if t.type == txn_type)
 
 
@@ -17,30 +18,14 @@ def _pct_change(current: float, previous: float) -> float | None:
     return ((current - previous) / previous) * 100
 
 
-def get_overview(db: Session, business_id: int, period: str = "30d") -> dict:
+def get_overview(db: Database, business_id: int, period: str = "30d") -> dict:
     days = PERIOD_DAYS.get(period, 30)
     today = date.today()
     current_start = today - timedelta(days=days)
     previous_start = today - timedelta(days=days * 2)
 
-    current_txns = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.txn_date > current_start,
-            Transaction.txn_date <= today,
-        )
-        .all()
-    )
-    previous_txns = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.txn_date > previous_start,
-            Transaction.txn_date <= current_start,
-        )
-        .all()
-    )
+    current_txns = find_txns(db, {"business_id": business_id, "txn_date": {"$gt": day(current_start), "$lte": day(today)}})
+    previous_txns = find_txns(db, {"business_id": business_id, "txn_date": {"$gt": day(previous_start), "$lte": day(current_start)}})
 
     current_income = _sum_amounts(current_txns, TransactionType.income)
     current_expenses = _sum_amounts(current_txns, TransactionType.expense)
@@ -50,12 +35,8 @@ def get_overview(db: Session, business_id: int, period: str = "30d") -> dict:
     current_net = current_income - current_expenses
     previous_net = previous_income - previous_expenses
 
-    all_txns = (
-        db.query(Transaction)
-        .filter(Transaction.business_id == business_id, Transaction.txn_date <= today)
-        .all()
-    )
-    business = db.get(Business, business_id)
+    all_txns = find_txns(db, {"business_id": business_id, "txn_date": {"$lte": day(today)}})
+    business = get_business(db, business_id)
     opening = float(business.opening_balance) if business else 0.0
     all_income = _sum_amounts(all_txns, TransactionType.income)
     all_expenses = _sum_amounts(all_txns, TransactionType.expense)
@@ -107,20 +88,12 @@ def get_overview(db: Session, business_id: int, period: str = "30d") -> dict:
     }
 
 
-def get_cashflow_series(db: Session, business_id: int, period: str = "30d") -> list[dict]:
+def get_cashflow_series(db: Database, business_id: int, period: str = "30d") -> list[dict]:
     days = PERIOD_DAYS.get(period, 30)
     today = date.today()
     start = today - timedelta(days=days)
 
-    txns = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.txn_date > start,
-            Transaction.txn_date <= today,
-        )
-        .all()
-    )
+    txns = find_txns(db, {"business_id": business_id, "txn_date": {"$gt": day(start), "$lte": day(today)}})
 
     by_day: dict[date, dict[str, float]] = {}
     for i in range(days):
@@ -147,20 +120,18 @@ def get_cashflow_series(db: Session, business_id: int, period: str = "30d") -> l
     return series
 
 
-def get_spending_mix(db: Session, business_id: int, period: str = "30d") -> list[dict]:
+def get_spending_mix(db: Database, business_id: int, period: str = "30d") -> list[dict]:
     days = PERIOD_DAYS.get(period, 30)
     today = date.today()
     start = today - timedelta(days=days)
 
-    txns = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.type == TransactionType.expense,
-            Transaction.txn_date > start,
-            Transaction.txn_date <= today,
-        )
-        .all()
+    txns = find_txns(
+        db,
+        {
+            "business_id": business_id,
+            "type": TransactionType.expense.value,
+            "txn_date": {"$gt": day(start), "$lte": day(today)},
+        },
     )
 
     totals: dict[str, float] = {}
@@ -180,20 +151,18 @@ def get_spending_mix(db: Session, business_id: int, period: str = "30d") -> list
     return result
 
 
-def get_top_vendors(db: Session, business_id: int, period: str = "30d", limit: int = 10) -> list[dict]:
+def get_top_vendors(db: Database, business_id: int, period: str = "30d", limit: int = 10) -> list[dict]:
     days = PERIOD_DAYS.get(period, 30)
     today = date.today()
     start = today - timedelta(days=days)
 
-    txns = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.type == TransactionType.expense,
-            Transaction.txn_date > start,
-            Transaction.txn_date <= today,
-        )
-        .all()
+    txns = find_txns(
+        db,
+        {
+            "business_id": business_id,
+            "type": TransactionType.expense.value,
+            "txn_date": {"$gt": day(start), "$lte": day(today)},
+        },
     )
 
     totals: dict[str, dict] = {}

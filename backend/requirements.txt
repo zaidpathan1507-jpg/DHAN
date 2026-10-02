@@ -1,7 +1,6 @@
 fastapi
 uvicorn[standard]
-sqlalchemy
-psycopg[binary]
+pymongo
 pydantic
 pydantic-settings
 python-jose[cryptography]

@@ -1,51 +1,45 @@
 import { Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import CreditGauge from "../credit/CreditGauge.jsx";
+import { useI18n } from "../../lib/i18n.jsx";
 import EmptyState from "../common/EmptyState.jsx";
-import { SkeletonCard } from "../common/Skeleton.jsx";
-
-const BAND_STYLES = {
-  EXCELLENT: "bg-dhan-green-light text-dhan-green-dark",
-  GOOD: "bg-dhan-green-light text-dhan-green-dark",
-  FAIR: "bg-amber-light text-amber",
-  "NEEDS WORK": "bg-danger-light text-danger",
-};
+import Skeleton from "../common/Skeleton.jsx";
+import CreditGauge, { BAND_CHIP } from "../credit/CreditGauge.jsx";
 
 export default function CreditScoreCard({ data, loading }) {
-  if (loading) return <SkeletonCard lines={2} />;
+  const { t } = useI18n();
+
+  if (loading) return <Skeleton className="h-72 w-full rounded-2xl" />;
 
   if (!data || data.insufficient_history) {
     return (
-      <div className="card p-5 md:p-6 h-full">
-        <h3 className="text-base font-semibold text-navy">Credit Readiness</h3>
-        <EmptyState icon={Wallet} title="Not enough history yet." body={data?.message} />
+      <div className="card h-full p-5 md:p-6">
+        <h2 className="text-lg font-extrabold text-ink">{t("dash.credit")}</h2>
+        <EmptyState icon={Wallet} title={t("dash.noHistory")} body={data?.message} />
       </div>
     );
   }
 
   return (
-    <div className="card p-5 md:p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-navy">Credit Readiness</h3>
-        <Link to="/credit" className="text-xs font-medium text-dhan-green hover:underline">
-          View details
+    <div className="card flex h-full flex-col p-5 md:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-extrabold text-ink">{t("dash.credit")}</h2>
+        <Link to="/credit" className="link text-sm">
+          {t("common.viewDetails")}
         </Link>
       </div>
 
-      <div className="mt-3 flex items-center gap-4">
-        <CreditGauge score={data.score} band={data.band} size={96} />
-        <div>
-          <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${BAND_STYLES[data.band]}`}>
-            {data.band}
-          </span>
-          <p className="mt-2 text-xs text-navy-soft leading-relaxed">
-            Biggest opportunity: <span className="font-medium text-navy">{data.biggest_opportunity.label}</span>
+      <div className="mt-4 flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center">
+        <CreditGauge score={data.score} band={data.band} width={190} />
+        <div className="text-center sm:text-left">
+          <span className={`chip ${BAND_CHIP[data.band]}`}>{t(`band.${data.band}`)}</span>
+          <p className="mt-2.5 text-sm text-ink-soft">
+            {t("dash.biggestOpp")}: <span className="font-extrabold text-ink">{data.biggest_opportunity.label}</span>
           </p>
         </div>
       </div>
 
-      <p className="mt-3 text-[11px] text-navy-soft/50 leading-relaxed">Indicative credit-readiness indicator, not a CIBIL score.</p>
+      <p className="mt-3 text-xs text-ink-muted">{t("dash.notCibil")}</p>
     </div>
   );
 }

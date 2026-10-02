@@ -1,13 +1,36 @@
-import { motion } from "framer-motion";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import AuthShell from "../components/auth/AuthShell.jsx";
+import PasswordField from "../components/common/PasswordField.jsx";
 import { useAuth } from "../lib/AuthContext.jsx";
+import { BUSINESS_TYPES } from "../lib/constants.js";
+import { useI18n } from "../lib/i18n.jsx";
 
-const BUSINESS_TYPES = ["Retail", "Manufacturing", "Services", "Wholesale/Trading", "Food & Beverage", "Other"];
+function Field({ id, label, type = "text", value, onChange, placeholder, inputMode, autoComplete, required = true }) {
+  return (
+    <div>
+      <label htmlFor={id} className="field-label">
+        {label}
+      </label>
+      <input
+        id={id}
+        required={required}
+        type={type}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="field"
+      />
+    </div>
+  );
+}
 
 export default function Register() {
   const { register } = useAuth();
+  const { t, tr } = useI18n();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "",
@@ -28,141 +51,101 @@ export default function Register() {
     setError("");
     setSubmitting(true);
     try {
-      await register({ ...form, opening_balance: parseFloat(form.opening_balance) || 0 });
+      await register({
+        ...form,
+        phone: form.phone.replace(/\s+/g, ""),
+        opening_balance: parseFloat(form.opening_balance) || 0,
+      });
       navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.detail || "Something went wrong. Please try again.");
+      setError(err.response?.data?.detail || t("auth.genericError"));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-surface">
-      <div className="hidden lg:flex flex-col justify-between bg-navy text-white p-12 relative overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="flex items-center gap-2"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-dhan-green text-white font-bold">
-            D
+    <AuthShell title1={t("auth.regTitle1")} title2={t("auth.regTitle2")} sub={t("auth.regSub")}>
+      <h2 className="text-3xl font-extrabold tracking-tight text-ink">{t("auth.createTitle")}</h2>
+      <p className="mt-1.5 text-[15px] text-ink-soft">{t("auth.createSub")}</p>
+
+      <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+        <div role="group" aria-labelledby="grp-you" className="space-y-4">
+          <h3 id="grp-you" className="text-base font-extrabold text-ink">{t("auth.about")}</h3>
+          <Field id="name" label={t("auth.name")} value={form.name} onChange={set("name")} placeholder="Zaid Shaikh" autoComplete="name" />
+          <Field
+            id="phone"
+            label={t("auth.phone")}
+            value={form.phone}
+            onChange={set("phone")}
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            placeholder="98765 43210"
+          />
+          <PasswordField
+            label={t("auth.password")}
+            value={form.password}
+            onChange={set("password")}
+            placeholder={t("auth.passwordHint")}
+            autoComplete="new-password"
+          />
+        </div>
+
+        <div role="group" aria-labelledby="grp-biz" className="space-y-4 pt-3">
+          <h3 id="grp-biz" className="text-base font-extrabold text-ink">{t("auth.aboutBiz")}</h3>
+          <Field
+            id="business_name"
+            label={t("auth.bizName")}
+            value={form.business_name}
+            onChange={set("business_name")}
+            placeholder="Shree Enterprises"
+            autoComplete="organization"
+          />
+          <div>
+            <label htmlFor="business_type" className="field-label">
+              {t("auth.bizType")}
+            </label>
+            <select id="business_type" value={form.business_type} onChange={set("business_type")} className="field">
+              {BUSINESS_TYPES.map((b) => (
+                <option key={b} value={b}>
+                  {tr("biz", b)}
+                </option>
+              ))}
+            </select>
           </div>
-          <span className="text-xl font-bold tracking-tight">DHAN</span>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
-          className="max-w-md"
-        >
-          <h1 className="text-4xl font-bold leading-tight">
-            Set up your
-            <br />
-            business in minutes.
-          </h1>
-          <p className="mt-4 text-white/60 text-base leading-relaxed">
-            One place for income, expenses, and the insights that matter.
-          </p>
-        </motion.div>
-
-        <p className="text-xs text-white/30">Hack2Ignite 2026 · PS ID FT-05</p>
-        <div className="pointer-events-none absolute -right-24 -bottom-24 h-80 w-80 rounded-full bg-dhan-green/10 blur-3xl" />
-      </div>
-
-      <div className="flex items-center justify-center p-6 sm:p-12">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.1 }}
-          className="w-full max-w-sm"
-        >
-          <div className="lg:hidden flex items-center gap-2 mb-8 justify-center">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-dhan-green text-white font-bold">
-              D
-            </div>
-            <span className="text-xl font-bold tracking-tight text-navy">DHAN</span>
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="city" label={t("auth.city")} value={form.city} onChange={set("city")} placeholder="Mumbai" />
+            <Field
+              id="opening_balance"
+              label={t("auth.openingHint")}
+              value={form.opening_balance}
+              onChange={set("opening_balance")}
+              type="number"
+              inputMode="decimal"
+              placeholder="0"
+              required={false}
+            />
           </div>
+        </div>
 
-          <h2 className="text-2xl font-bold text-navy">Create your account</h2>
-          <p className="mt-1 text-sm text-navy-soft">Takes less than a minute.</p>
-
-          <form onSubmit={handleSubmit} className="mt-6 space-y-3.5">
-            <Field label="Your Name" value={form.name} onChange={set("name")} placeholder="Zaid Shaikh" />
-            <Field label="Phone" value={form.phone} onChange={set("phone")} type="tel" placeholder="98765 43210" />
-            <Field
-              label="Password"
-              value={form.password}
-              onChange={set("password")}
-              type="password"
-              placeholder="At least 6 characters"
-            />
-            <Field
-              label="Business Name"
-              value={form.business_name}
-              onChange={set("business_name")}
-              placeholder="Shree Enterprises"
-            />
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-navy-soft/70 mb-1 block">
-                Business Type
-              </label>
-              <select
-                value={form.business_type}
-                onChange={set("business_type")}
-                className="w-full rounded-xl border border-surface-border bg-surface-card px-3.5 py-2.5 text-sm text-navy focus:border-dhan-green outline-none"
-              >
-                {BUSINESS_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="City" value={form.city} onChange={set("city")} placeholder="Mumbai" />
-              <Field
-                label="Opening Balance"
-                value={form.opening_balance}
-                onChange={set("opening_balance")}
-                type="number"
-                placeholder="0"
-              />
-            </div>
-
-            {error && <p className="text-sm text-danger">{error}</p>}
-
-            <button type="submit" disabled={submitting} className="btn-primary w-full mt-1">
-              {submitting ? "Creating account..." : "Create account"}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-navy-soft">
-            Already have an account?{" "}
-            <Link to="/login" className="font-semibold text-dhan-green hover:underline">
-              Log in
-            </Link>
+        {error && (
+          <p role="alert" className="rounded-xl bg-loss-soft px-3.5 py-2.5 text-sm font-semibold text-loss">
+            {error}
           </p>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
+        )}
 
-function Field({ label, type = "text", value, onChange, placeholder }) {
-  return (
-    <div>
-      <label className="text-xs font-semibold uppercase tracking-wide text-navy-soft/70 mb-1 block">{label}</label>
-      <input
-        required
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-surface-border bg-surface-card px-3.5 py-2.5 text-sm text-navy focus:border-dhan-green outline-none"
-      />
-    </div>
+        <button type="submit" disabled={submitting} className="btn-primary w-full">
+          {submitting ? t("auth.creating") : t("auth.createBtn")}
+        </button>
+      </form>
+
+      <p className="mt-6 text-center text-[15px] text-ink-soft">
+        {t("auth.haveAccount")}{" "}
+        <Link to="/login" className="link">
+          {t("auth.login")}
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

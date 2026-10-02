@@ -1,12 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Info, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, Info, TrendingDown, TrendingUp, WandSparkles } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import api from "../../lib/apiClient.js";
+import { sentenceCase } from "../../lib/constants.js";
+import { useI18n } from "../../lib/i18n.jsx";
 
-const SEVERITY_STYLES = {
-  high: { border: "border-danger/25", badge: "bg-danger-light text-danger", icon: AlertTriangle },
-  warning: { border: "border-amber/25", badge: "bg-amber-light text-amber", icon: AlertTriangle },
-  normal: { border: "border-dhan-green/20", badge: "bg-dhan-green-light text-dhan-green-dark", icon: TrendingDown },
+const SEVERITY = {
+  high: { chip: "bg-loss-soft text-loss", text: "text-loss" },
+  warning: { chip: "bg-warn-soft text-warn", text: "text-warn" },
+  normal: { chip: "bg-gain-soft text-gain-ink", text: "text-gain" },
 };
 
 const TYPE_ICON = {
@@ -16,9 +19,10 @@ const TYPE_ICON = {
 };
 
 export default function InsightCard({ insight }) {
-  const style = SEVERITY_STYLES[insight.severity] || SEVERITY_STYLES.normal;
+  const style = SEVERITY[insight.severity] || SEVERITY.normal;
   const Icon = TYPE_ICON[insight.type] || Info;
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   const reviewMutation = useMutation({
     mutationFn: (status) => api.patch(`/transactions/${insight.txn_id}`, { description: `Reviewed: ${status}` }),
@@ -26,42 +30,47 @@ export default function InsightCard({ insight }) {
   });
 
   return (
-    <div className={`card border p-4 md:p-5 ${style.border} animate-fade-up`}>
-      <div className="flex items-start gap-3">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.badge}`}>
-          <Icon size={15} strokeWidth={2} />
+    <article className="rounded-2xl border border-surface-border bg-surface-card p-4 shadow-subtle animate-fade-up md:p-5">
+      <div className="flex items-start gap-3.5">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${style.chip}`}>
+          <Icon size={19} strokeWidth={2} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold tracking-wide text-navy-soft/70">{insight.title}</p>
-            <span className={`shrink-0 text-base font-bold tabular-nums ${style.badge.split(" ")[1]}`}>
-              {insight.headline}
-            </span>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-[15px] font-extrabold text-ink">{sentenceCase(insight.title)}</h3>
+            <span className={`num shrink-0 text-lg font-extrabold ${style.text}`}>{insight.headline}</span>
           </div>
-          <p className="mt-1.5 text-sm text-navy leading-relaxed">{insight.body}</p>
+          <p className="mt-1.5 text-[15px] leading-relaxed text-ink-soft">{insight.body}</p>
 
           {insight.txn_id ? (
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3.5 flex flex-wrap gap-2">
               <button
                 onClick={() => reviewMutation.mutate("expected")}
-                className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-medium text-navy-soft hover:bg-surface-muted"
+                disabled={reviewMutation.isPending}
+                className="btn-secondary min-h-[40px] px-3.5 py-2"
               >
-                Expected
+                {t("ins.expected")}
               </button>
               <button
                 onClick={() => reviewMutation.mutate("needs review")}
-                className="rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy-soft"
+                disabled={reviewMutation.isPending}
+                className="btn-ink min-h-[40px] px-3.5 py-2"
               >
-                Needs Review
+                {t("ins.needsReview")}
               </button>
             </div>
           ) : (
-            insight.action && <p className="mt-2 text-xs font-medium text-navy-soft">{insight.action}</p>
+            insight.action && <p className="mt-2.5 text-sm font-bold text-ink">{insight.action}</p>
           )}
 
-          <p className="mt-2 text-[11px] text-navy-soft/40">Method: {insight.method}</p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-ink-muted">{t("ins.method", { method: insight.method })}</p>
+            <Link to={`/ask?q=${encodeURIComponent(`${t("ai.askWhy")}: ${sentenceCase(insight.title)} ${insight.headline}`)}`} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-2.5 text-xs font-extrabold text-gold-700 hover:bg-gold-50">
+              <WandSparkles size={14} /> {t("ai.askWhy")}
+            </Link>
+          </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

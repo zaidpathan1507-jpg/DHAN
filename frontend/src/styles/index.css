@@ -5,37 +5,152 @@
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    scrollbar-color: #CFCBBE transparent;
+    scrollbar-width: thin;
+  }
+  /* Devanagari needs more vertical room than Latin or matras collide with the line above. */
+  html[lang="hi"] body {
+    line-height: 1.7;
+  }
+  html[lang="hi"] h1,
+  html[lang="hi"] h2,
+  html[lang="hi"] h3 {
+    line-height: 1.35;
+    letter-spacing: 0;
   }
   body {
-    @apply bg-surface text-navy font-sans;
+    @apply bg-surface text-ink font-sans;
+    font-feature-settings: "ss01" 1;
+    accent-color: #F0B429;
+    caret-color: #D9990B;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  ::selection {
+    background: #FDEBB0;
+    color: #0B1B2B;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CFCBBE;
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
   :focus-visible {
-    @apply outline-none ring-2 ring-dhan-green ring-offset-2 ring-offset-surface;
+    @apply outline-none ring-2 ring-ink ring-offset-2 ring-offset-surface;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #7B8896;
   }
 }
 
 @layer components {
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
   .card {
     @apply bg-surface-card border border-surface-border rounded-2xl shadow-subtle;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply btn bg-dhan-green text-white hover:bg-dhan-green-dark active:scale-[0.98];
+    @apply btn bg-gold-500 text-ink shadow-subtle hover:bg-gold-400 active:scale-[0.98];
   }
   .btn-secondary {
-    @apply btn bg-surface-card text-navy border border-surface-border hover:bg-surface-muted active:scale-[0.98];
+    @apply btn bg-surface-card text-ink border border-surface-strong hover:bg-surface-muted active:scale-[0.98];
+  }
+  .btn-ink {
+    @apply btn bg-ink text-white hover:bg-ink-soft active:scale-[0.98];
   }
   .btn-danger {
-    @apply btn bg-danger text-white hover:opacity-90 active:scale-[0.98];
+    @apply btn bg-loss text-white hover:opacity-90 active:scale-[0.98];
+  }
+  .field-label {
+    @apply mb-1.5 block text-[13px] font-semibold text-ink-soft;
+  }
+  .field {
+    @apply w-full min-h-[46px] rounded-xl border border-surface-strong bg-surface-card px-3.5 py-2.5 text-base text-ink transition-shadow focus:border-ink focus:outline-none focus:ring-2 focus:ring-gold-500/50;
+  }
+  select.field {
+    @apply appearance-none pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2333475B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold;
+  }
+  .link {
+    @apply font-bold text-ink underline decoration-gold-500 decoration-2 underline-offset-4 hover:decoration-ink;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* range sliders: light track, gold thumb with an ink ring (matches the brand, readable on paper) */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #E2DFD5;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 26px;
+  width: 26px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: #F0B429;
+  border: 3px solid #0B1B2B;
+  box-shadow: 0 2px 6px rgba(11, 27, 43, 0.25);
+}
+input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #E2DFD5;
+}
+input[type="range"]::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #F0B429;
+  border: 3px solid #0B1B2B;
+}
+
+@media print {
+  .no-print,
+  aside,
+  header.sticky,
+  nav[aria-label="Main"] {
+    display: none !important;
+  }
+  main {
+    padding-left: 0 !important;
+  }
+  body {
+    background: #fff;
   }
 }

@@ -7,12 +7,36 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://dhan_user:dhan_pass@localhost:5432/dhan_db"
+    mongodb_uri: str = "mongodb://localhost:27017"
+    mongodb_db: str = "dhan"
     jwt_secret: str = "dev-secret-change-me"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7
 
     google_vision_api_key: str | None = None
+
+    # Udhaar links point here (the frontend URL customers open).
+    app_base_url: str = "http://localhost:5173"
+    reminders_enabled: bool = True
+
+    # Optional integrations. Unset = simulated (messages go to the in-app outbox instead of the network).
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    whatsapp_token: str | None = None  # Meta WhatsApp Cloud API
+    whatsapp_phone_id: str | None = None
+    razorpay_key_id: str | None = None
+    razorpay_key_secret: str | None = None
+    razorpay_webhook_secret: str | None = None
+
+    # DHAN AI (Groq, OpenAI-compatible API). Unset = built-in rules engine answers from the same data tools.
+    groq_api_key: str | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_stt_model: str = "whisper-large-v3-turbo"  # speech-to-text (Hindi/Marathi/English voice)
+    groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"  # reads bill photos
 
     cors_origins: list[str] = [
         "http://localhost:5173",

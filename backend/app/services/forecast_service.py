@@ -10,9 +10,10 @@ made-up number.
 import statistics
 from datetime import date, timedelta
 
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from app.db.models import Business, Transaction, TransactionType
+from app.db.models import TransactionType
+from app.db.session import day, find_txns, get_business
 
 PERIOD_LENGTH_DAYS = 30
 ROLLING_PERIODS = 6
@@ -30,7 +31,7 @@ def _period_bounds(today: date, periods_back: int) -> list[tuple[date, date]]:
     return bounds
 
 
-def _period_net(txns: list[Transaction], start: date, end: date) -> float:
+def _period_net(txns: list, start: date, end: date) -> float:
     income = sum(float(t.amount) for t in txns if t.type == TransactionType.income and start < t.txn_date <= end)
     expense = sum(float(t.amount) for t in txns if t.type == TransactionType.expense and start < t.txn_date <= end)
     return income - expense
@@ -49,17 +50,13 @@ def _weighted_forecast(period_nets: list[float]) -> float:
     return weighted + trend
 
 
-def get_forecast(db: Session, business_id: int) -> dict:
+def get_forecast(db: Database, business_id: int) -> dict:
     today = date.today()
-    business = db.get(Business, business_id)
+    business = get_business(db, business_id)
     opening = float(business.opening_balance) if business else 0.0
 
     earliest_bound = today - timedelta(days=ROLLING_PERIODS * PERIOD_LENGTH_DAYS)
-    all_txns = (
-        db.query(Transaction)
-        .filter(Transaction.business_id == business_id, Transaction.txn_date <= today)
-        .all()
-    )
+    all_txns = find_txns(db, {"business_id": business_id, "txn_date": {"$lte": day(today)}})
     pre_window_txns = [t for t in all_txns if t.txn_date <= earliest_bound]
     pre_window_net = sum(
         float(t.amount) if t.type == TransactionType.income else -float(t.amount) for t in pre_window_txns
@@ -129,20 +126,18 @@ def get_forecast(db: Session, business_id: int) -> dict:
     }
 
 
-def _forecast_by_category(db: Session, business_id: int, today: date) -> list[dict]:
+def _forecast_by_category(db: Database, business_id: int, today: date) -> list[dict]:
     bounds = _period_bounds(today, 3)
     start = bounds[0][0]
 
-    txns = (
-        db.query(Transaction)
-        .filter(
-            Transaction.business_id == business_id,
-            Transaction.type == TransactionType.expense,
-            Transaction.txn_date > start,
-            Transaction.txn_date <= today,
-            Transaction.is_anomaly.is_(False),
-        )
-        .all()
+    txns = find_txns(
+        db,
+        {
+            "business_id": business_id,
+            "type": TransactionType.expense.value,
+            "txn_date": {"$gt": day(start), "$lte": day(today)},
+            "is_anomaly": False,
+        },
     )
 
     by_category_period: dict[str, list[float]] = {}
@@ -161,3 +156,45 @@ def _forecast_by_category(db: Session, business_id: int, today: date) -> list[di
         results.append({"category": category, "expected_amount": round(max(forecast_amt, 0), 2)})
     results.sort(key=lambda r: r["expected_amount"], reverse=True)
     return results
+
+
+def simulate(db: Database, business_id: str, sales_pct: float, cost_pct: float, one_time: float) -> dict:
+    """What-if on top of the real forecast: shift next-30-day net by a % change in sales / costs (measured on the
+    last 30 days) plus a one-time cash movement (+ loan / grant, - purchase)."""
+    base = get_forecast(db, business_id)
+    if base["insufficient_history"]:
+        return base
+
+    today = date.today()
+    start = today - timedelta(days=PERIOD_LENGTH_DAYS)
+    last = find_txns(db, {"business_id": business_id, "txn_date": {"$gt": day(start), "$lte": day(today)}})
+    income = sum(float(t.amount) for t in last if t.type == TransactionType.income)
+    expense = sum(float(t.amount) for t in last if t.type == TransactionType.expense)
+
+    current = base["current_cash_balance"]
+    expected_net = base["expected_closing_balance"] - current
+    delta = income * sales_pct / 100 - expense * cost_pct / 100 + one_time
+    scenario_net = expected_net + delta
+    spread = base["best_case"] - base["expected_closing_balance"]
+    scenario_close = current + scenario_net
+
+    return {
+        "insufficient_history": False,
+        "current_cash_balance": current,
+        "last_30d": {"income": round(income, 2), "expenses": round(expense, 2)},
+        "baseline": {
+            "expected": base["expected_closing_balance"],
+            "worst": base["worst_case"],
+            "best": base["best_case"],
+            "net": round(expected_net, 2),
+        },
+        "scenario": {
+            "expected": round(scenario_close, 2),
+            "worst": round(scenario_close - spread, 2),
+            "best": round(scenario_close + spread, 2),
+            "net": round(scenario_net, 2),
+        },
+        "delta": round(delta, 2),
+        # months of cash left if the scenario's monthly net kept repeating; None when it is not burning cash
+        "runway_months": round(current / -scenario_net, 1) if scenario_net < 0 else None,
+    }
