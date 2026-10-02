@@ -1,0 +1,12 @@
+{
+  "name": "dhan",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix frontend install && python -m pip install -r backend/requirements.txt",
+    "build": "npm --prefix frontend run build",
+    "start": "python -m uvicorn app.main:app --app-dir backend --port 8000",
+    "prod": "npm run build && npm start",
+    "dev:api": "python -m uvicorn app.main:app --app-dir backend --reload --port 8000",
+    "dev:web": "npm --prefix frontend run dev"
+  }
+}

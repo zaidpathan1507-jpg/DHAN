@@ -34,4 +34,4 @@ data/
 uploads/
 
 # ML generated artifacts if not intentionally versioned
-*.joblib
+*.joblib.impeccable/
