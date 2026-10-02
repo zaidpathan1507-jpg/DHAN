@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     google_vision_api_key: str | None = None
 
     # Udhaar links point here (the frontend URL customers open).
-    app_base_url: str = "http://localhost:5173"
+    app_base_url: str = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:5173")  # Render sets this automatically
     reminders_enabled: bool = True
 
     # Optional integrations. Unset = simulated (messages go to the in-app outbox instead of the network).

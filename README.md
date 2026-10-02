@@ -131,3 +131,16 @@ docs/PITCH.md          pitch kit: one-liner, demo script, business model, archit
 - Seeded data is tagged `DEMO DATA`; anything you add is tagged `LIVE`.
 - Lenders are fictional, email and WhatsApp are simulated without keys, and the credit score is indicative only.
 - Not built yet: deployment, PWA / offline mode, more languages (Tamil, Gujarati, etc.), budgets.
+
+## Run as one app (one link)
+
+The backend serves the built frontend, so a single process and a single URL runs everything.
+
+```bash
+npm run install:all   # once
+npm run prod          # builds the frontend, then serves app + API on http://localhost:8000
+```
+
+Dev mode with hot reload: `npm run dev:api` in one terminal and `npm run dev:web` in another.
+
+Deploying on Render: see the `Dockerfile` and `render.yaml` at the repo root (the step-by-step guide is in `docs/DEPLOY.md`).

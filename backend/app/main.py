@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import ai, auth, bot, gst, loans, reports, team, cash_calendar, credit, dashboard, demo, forecast, insights, notifications, passport, receivables, transactions, udhaar_public
 from app.core.config import get_settings
@@ -49,3 +53,18 @@ app.include_router(bot.voice_router, prefix="/api/v1")
 @app.get("/api/v1/health")
 def health():
     return {"status": "ok"}
+
+
+# One-link deploy: when the frontend has been built (frontend/dist), this server serves it too.
+DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str):
+        if path.startswith("api/"):
+            raise HTTPException(404)
+        file = (DIST / path).resolve()
+        if path and file.is_file() and DIST in file.parents:
+            return FileResponse(file)
+        return FileResponse(DIST / "index.html")  # client-side routes (/dashboard, /pay/<token>, ...)
