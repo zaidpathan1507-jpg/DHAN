@@ -101,6 +101,7 @@ def serialize(doc: dict, today: date) -> dict:
         "link": link_of(doc), "promise_date": doc["promise_date"].date() if doc.get("promise_date") else None,
         "claim": doc.get("claim"), "views": len(views), "last_viewed_at": views[-1]["at"] if views else None,
         "last_sent_at": sent[-1]["at"] if sent else None, "channels_sent": sorted({e["params"]["channel"] for e in sent}),
+        "disputed": bool(doc.get("disputed")), "last_failure": next((e for e in reversed(doc.get("events", [])) if e["type"] in ("pay_failed", "payment")), None),
         "events": doc.get("events", []), "payments": doc.get("payments", []), "razorpay_url": doc.get("razorpay_url"),
     }
 
@@ -204,7 +205,7 @@ def run_reminders(db: Database, today: date | None = None) -> int:
         promise = doc.get("promise_date")
         if promise and promise.date() >= today:  # respect the customer's promise
             continue
-        if doc.get("claim"):  # waiting for the owner to confirm; do not nag
+        if doc.get("claim") or doc.get("disputed"):  # waiting on the owner (claim) or the customer disagrees: do not nag
             continue
         step, consumed = due_step(doc, today)
         if not step:

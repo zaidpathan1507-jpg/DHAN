@@ -51,7 +51,9 @@ async def stream(request: Request, token: str):
     user = await run_in_threadpool(database.users.find_one, {"_id": _id}) if _id else None
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
-    business_id = user["business_id"]
+    business_id = user.get("business_id")
+    if not business_id:
+        raise HTTPException(status_code=403, detail="Owner accounts only")
     latest = await run_in_threadpool(lambda: database.notifications.find_one({"business_id": business_id}, sort=[("_id", -1)]))
     last_id: ObjectId = latest["_id"] if latest else ObjectId("0" * 24)
 

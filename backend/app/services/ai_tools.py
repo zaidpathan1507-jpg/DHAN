@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from pymongo.database import Database
 
 from app.db.session import day, find_txns, get_business
-from app.services import ai_actions, cash_calendar as cc, gst_service, udhaar_service as u
+from app.services import advisor_service, ai_actions, cash_calendar as cc, gst_service, udhaar_service as u
 from app.services.credit_service import get_credit_readiness
 from app.services.forecast_service import get_forecast
 from app.services.insights_service import generate_insights
@@ -216,6 +216,19 @@ def get_gst_tool(db: Database, bid: str, lang: str, today: date, months: int = 3
         _metric(L(lang, "GSTR-3B in (days)", "GSTR-3B में (दिन)"), f["days_to_gstr3b"], kind="count")]}
 
 
+def get_profit_advice(db: Database, bid: str, lang: str, today: date) -> tuple[dict, dict | None]:
+    a = advisor_service.analyze(db, bid, today)
+    if a.get("insufficient"):
+        return {"insufficient_history": True}, None
+    p, top = a["pnl"], a["recommendations"][:4]
+    data = {"profit_90d": p["profit"], "margin_pct": p["margin"], "health_score": a["health"]["score"], "potential_extra_profit_per_month": a["potential_monthly"],
+            "top_recommendations": [{"title": advisor_service.title(r, "en"), "extra_profit_per_month": r["impact"], "priority": r["priority"], "evidence": {k: v for k, v in r["params"].items() if isinstance(v, (str, int, float))}} for r in top],
+            "note": "Rule-based estimates from this business's own books. Full plan is on the Profit Coach page."}
+    return data, {"type": "metrics", "title": L(lang, "Profit check · last 90 days", "मुनाफ़ा जांच · पिछले 90 दिन"), "items": [
+        _metric(L(lang, "Profit", "मुनाफ़ा"), p["profit"], tone="gain" if p["profit"] >= 0 else "loss"), _metric(L(lang, "Margin %", "मार्जिन %"), p["margin"], kind="pct"),
+        _metric(L(lang, "Could add / month", "हर महीने जुड़ सकता है"), a["potential_monthly"], tone="gain")]}
+
+
 def get_insights_tool(db: Database, bid: str, lang: str, today: date) -> tuple[dict, None]:
     ins = generate_insights(db, bid)[:6]
     return {"insights": [{"title": i["title"], "headline": i["headline"], "detail": i["body"]} for i in ins]}, None
@@ -224,7 +237,7 @@ def get_insights_tool(db: Database, bid: str, lang: str, today: date) -> tuple[d
 TOOLS = {
     "get_summary": get_summary, "get_spending_by_category": get_spending_by_category, "get_top_vendors": get_top_vendors,
     "search_transactions": search_transactions, "get_receivables": get_receivables, "get_forecast": get_forecast_tool,
-    "get_gst_summary": get_gst_tool, "get_cash_calendar": get_cash_calendar_tool, "propose_cash_plan": propose_cash_plan, "get_credit_readiness": get_credit_tool, "get_customer_reliability": get_customer_reliability,
+    "get_gst_summary": get_gst_tool, "get_profit_advice": get_profit_advice, "get_cash_calendar": get_cash_calendar_tool, "propose_cash_plan": propose_cash_plan, "get_credit_readiness": get_credit_tool, "get_customer_reliability": get_customer_reliability,
     "get_insights": get_insights_tool,
 }
 
@@ -246,6 +259,7 @@ SCHEMAS = [
     _fn("get_cash_calendar", "Day-by-day cash projection: lowest point, safety buffer, any predicted cash crunch date and a rescue plan.", {"days": {"type": "integer"}}),
     _fn("propose_cash_plan", "Use when the user asks what to do about tight cash, overdue invoices or bills, or wants a plan or fix. Proposes concrete actions the user can approve with one tap. It never executes anything."),
     _fn("get_gst_summary", "Estimated GST: net payable for the filing period, input tax credit, missing supplier invoices, and the GSTR-1/GSTR-3B due dates.", {"months": {"type": "integer"}, "rate": {"type": "integer", "enum": [0, 5, 12, 18, 28]}}),
+    _fn("get_profit_advice", "Use when the user asks how to earn more, be more profitable, cut costs, improve margins or wants CA-style business advice. Returns margin, health score and the top ranked recommendations with estimated monthly gain."),
     _fn("get_credit_readiness", "The business's indicative credit-readiness score and its components."),
     _fn("get_customer_reliability", "How reliably each customer pays: score, average days late, amount outstanding.", {"limit": {"type": "integer"}}),
     _fn("get_insights", "Automatically detected spending changes and unusual expenses."),

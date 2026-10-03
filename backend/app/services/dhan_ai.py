@@ -123,6 +123,7 @@ PERIOD_WORDS = [
     ("year", ["this year", "year to date", "ytd", "saal", "साल"]),
 ]
 INTENTS = [
+    ("advice", ["profitable", "more profit", "increase profit", "improve profit", "boost profit", "margin", "save money", "reduce cost", "cut cost", "cut expenses", "reduce expenses", "earn more", "grow my business", "grow my profit", "business advice", "ca advice", "munafa badhao", "profit kaise", "kharcha kaise kam", "मुनाफा बढ़ा", "मुनाफ़ा बढ़ा", "खर्च कैसे कम", "फायदा बढ़ा"]),
     ("plan", ["what should i do", "what can i do", "what do i do", "how do i fix", "how to fix", "action plan", "make a plan", "suggest", "kya karu", "kya karna", "क्या करूं", "क्या करना", "सुझाव", "उपाय", "योजना", "काय करू"]),
     ("customers", ["pays late", "late payer", "reliab", "risky customer", "slow payer", "देर से चुक", "भरोसेमंद"]),
     ("receivables", ["owe me", "owes me", "owed", "udhaar", "udhar", "baaki", "bakaya", "outstanding", "unpaid", "pending payment", "receivable", "overdue", "बकाया", "उधार", "बाकी", "मिलना"]),
@@ -227,6 +228,14 @@ def _rules_answer(db: Database, bid: str, question: str, lang: str, today: date)
         text = (L(lang, f"Expected balance in 30 days is {inr(d['expected_closing_balance_30d'])} (status {d['status'].title()}), between {inr(d['worst_case'])} and {inr(d['best_case'])}.",
                   f"30 दिन बाद अनुमानित बैलेंस {inr(d['expected_closing_balance_30d'])} है, {inr(d['worst_case'])} से {inr(d['best_case'])} के बीच।") if d.get("status")
                 else L(lang, "There isn't enough history for a reliable forecast yet.", "भरोसेमंद पूर्वानुमान के लिए अभी पर्याप्त इतिहास नहीं है।"))
+    elif intent == "advice":
+        d = call("get_profit_advice")
+        if d.get("insufficient_history"):
+            text = L(lang, "I need a few more weeks of transactions before I can advise on profit.", "मुनाफ़े पर सलाह देने के लिए कुछ और हफ़्तों के लेन-देन चाहिए।")
+        else:
+            lines = "; ".join(r["title"] for r in d["top_recommendations"][:3])
+            text = L(lang, f"Your margin is {d['margin_pct']}% and health score {d['health_score']}/100. The biggest levers: {lines}. Together they could add about {inr(d['potential_extra_profit_per_month'])} a month. The Profit Coach page has the full plan.",
+                     f"आपका मार्जिन {d['margin_pct']}% और हेल्थ स्कोर {d['health_score']}/100 है। सबसे बड़े उपाय: {lines}। मिलकर ये हर महीने लगभग {inr(d['potential_extra_profit_per_month'])} जोड़ सकते हैं। पूरी योजना Profit Coach पेज पर है।")
     elif intent == "gst":
         d = call("get_gst_summary")
         f = d["filing"]

@@ -77,6 +77,37 @@ def register(payload: RegisterRequest, db: Database = Depends(get_db)):
     return TokenResponse(access_token=create_access_token(subject=str(user_id)))
 
 
+class CustomerOtp(OtpRequest):
+    pass
+
+
+class CustomerRegister(OtpVerify):
+    name: str = Field(min_length=2, max_length=80)
+    password: str = Field(min_length=6, max_length=100)
+
+
+@router.post("/customer/otp")
+def customer_otp(payload: CustomerOtp, db: Database = Depends(get_db)):
+    """Step 1 of customer sign-up: prove the phone is yours. Their dues are matched by this number, so it must be verified."""
+    if db.users.find_one({"phone": payload.phone}):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This number already has an account. Log in instead.")
+    res = otp.issue(db, payload.phone)
+    if res.get("error"):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many codes requested. Try again later.")
+    return {"sent": True, "demo_code": res["demo_code"]}
+
+
+@router.post("/customer/register", response_model=TokenResponse)
+def customer_register(payload: CustomerRegister, db: Database = Depends(get_db)):
+    if not otp.verify(db, payload.phone, payload.code):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That code is wrong or has expired.")
+    try:
+        user_id = db.users.insert_one({"name": payload.name, "phone": payload.phone, "password_hash": hash_password(payload.password), "role": "customer", "created_at": datetime.now(timezone.utc)}).inserted_id
+    except DuplicateKeyError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This number already has an account. Log in instead.")
+    return TokenResponse(access_token=create_access_token(subject=str(user_id)))
+
+
 @router.post("/login")
 def login(payload: LoginRequest, db: Database = Depends(get_db)):
     if _locked(payload.phone):
@@ -127,7 +158,7 @@ def me(current_user=Depends(get_current_user), db: Database = Depends(get_db)):
         "two_factor": bool(doc.get("two_factor")),
         "report_email": doc.get("report_email"),
         "weekly_report": bool(doc.get("weekly_report")),
-        "business": get_business(db, current_user.business_id),
+        "business": get_business(db, current_user.business_id) if getattr(current_user, "business_id", None) else None,
     }
 
 

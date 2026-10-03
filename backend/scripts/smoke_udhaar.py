@@ -1,7 +1,9 @@
 # End-to-end self-check of the Udhaar flow on an in-memory DB (needs: pip install mongomock httpx).
 # Run from backend/:  PYTHONIOENCODING=utf-8 python scripts/smoke_udhaar.py
 import os, sys, json, hmac, hashlib
-os.environ["REMINDERS_ENABLED"] = "false"; os.environ["RAZORPAY_WEBHOOK_SECRET"] = "whsec_test"
+os.environ["REMINDERS_ENABLED"] = "false"
+os.environ["GROQ_API_KEY"] = ""  # tests assume the offline rules engine, whatever is in .env
+os.environ["RAZORPAY_WEBHOOK_SECRET"] = "whsec_test"
 sys.path.insert(0, ".")
 import mongomock, pymongo
 pymongo.MongoClient = mongomock.MongoClient

@@ -5,6 +5,7 @@ import os
 import sys
 
 os.environ["REMINDERS_ENABLED"] = "false"
+os.environ["GROQ_API_KEY"] = ""  # tests assume the offline rules engine, whatever is in .env
 sys.path.insert(0, ".")
 import mongomock, pymongo  # noqa: E402
 

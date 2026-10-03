@@ -41,7 +41,7 @@ class UserOut(BaseModel):
     two_factor: bool = False
     report_email: str | None = None
     weekly_report: bool = False
-    business: BusinessOut
+    business: BusinessOut | None = None
 
     class Config:
         from_attributes = True

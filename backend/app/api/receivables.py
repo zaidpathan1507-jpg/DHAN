@@ -234,6 +234,23 @@ def resolve_claim(item_id: str, payload: ClaimResolve, db: Database = Depends(ge
     return u.serialize(doc, date.today())
 
 
+class Reply(BaseModel):
+    text: str = Field(min_length=1, max_length=400)
+    resolve_dispute: bool = False
+
+
+@router.post("/{item_id}/reply")
+def reply_to_customer(item_id: str, payload: Reply, db: Database = Depends(get_db), current_user=Depends(get_current_user)):
+    """A message to the customer; they read it in their portal. Replying can also close their dispute."""
+    doc = _get_or_404(db, item_id, current_user.business_id)
+    u.log_event(db, doc["_id"], "msg", sender="owner", text=payload.text)
+    if payload.resolve_dispute and doc.get("disputed"):
+        db.receivables.update_one({"_id": doc["_id"]}, {"$unset": {"disputed": ""}})
+        u.log_event(db, doc["_id"], "dispute_resolved")
+    audit.log(db, current_user, "udhaar.reply", party=doc["party"])
+    return u.serialize(db.receivables.find_one({"_id": doc["_id"]}), date.today())
+
+
 @router.delete("/{item_id}", status_code=204)
 def delete_item(item_id: str, db: Database = Depends(get_db), current_user=Depends(get_current_user)):
     doc = _get_or_404(db, item_id, current_user.business_id)

@@ -4,6 +4,7 @@ import { Outlet } from "react-router-dom";
 
 import { useI18n } from "../../lib/i18n.jsx";
 import { NotificationsProvider } from "../../lib/notifications.jsx";
+import { useBankAutoSync } from "../../lib/useBankSync.js";
 import { useCanEdit } from "../../lib/useRole.js";
 import AddTransactionModal from "../transactions/AddTransactionModal.jsx";
 import MobileNav from "./MobileNav.jsx";
@@ -13,6 +14,7 @@ export default function AppLayout() {
   const [addOpen, setAddOpen] = useState(false);
   const { t } = useI18n();
   const canEdit = useCanEdit();
+  useBankAutoSync();
 
   return (
     <NotificationsProvider>

@@ -29,6 +29,9 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     user.role = getattr(user, "role", "owner")
+    # Customers have no business: they may only use their own portal and read their profile.
+    if user.role == "customer" and not request.url.path.startswith(("/api/v1/customer", "/api/v1/auth/me")):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is a customer account.")
     # One chokepoint for the accountant role: read-only everywhere except the whitelisted read-style POSTs.
     if user.role == "accountant" and request.method not in SAFE_METHODS and request.url.path not in READ_ONLY_POSTS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Read-only access: ask the owner to make this change.")

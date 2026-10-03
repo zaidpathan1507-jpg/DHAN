@@ -1,10 +1,12 @@
 import {
   Bot,
+  Building2,
   CalendarRange,
   FileText,
   HandCoins,
   Landmark,
   LayoutDashboard,
+  PiggyBank,
   LogOut,
   MessageCircle,
   Plus,
@@ -34,12 +36,14 @@ export const NAV_GROUPS = [
       { to: "/transactions", key: "nav.transactions", icon: Receipt },
       { to: "/receivables", key: "nav.receivables", icon: HandCoins },
       { to: "/cash-calendar", key: "nav.cashCalendar", icon: CalendarRange },
+      { to: "/bank", key: "nav.bank", icon: Building2 },
     ],
   },
   {
     key: "nav.g.intel",
     items: [
       { to: "/ask", key: "nav.ai", icon: WandSparkles },
+      { to: "/advisor", key: "nav.advisor", icon: PiggyBank },
       { to: "/insights", key: "nav.insights", icon: Sparkles },
       { to: "/forecast", key: "nav.forecast", icon: TrendingUp },
       { to: "/reports", key: "nav.reports", icon: FileText },

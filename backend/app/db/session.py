@@ -25,6 +25,8 @@ def ensure_indexes() -> None:
     database.otps.create_index("phone", unique=True)
     database.loan_applications.create_index("passport_token", unique=True)
     database.ai_actions.create_index("business_id")
+    database.bank_accounts.create_index("business_id", unique=True)
+    database.bank_ledger.create_index([("account_id", ASCENDING), ("status", ASCENDING)])
     database.bot_messages.create_index([("business_id", ASCENDING), ("at", ASCENDING)])
 
 

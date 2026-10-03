@@ -143,6 +143,9 @@ export default function Login() {
         {t("auth.newHere")}{" "}
         <Link to="/register" className="link">{t("auth.create")}</Link>
       </p>
+      <p className="mt-3 text-center text-sm">
+        <Link to="/customer/register" className="link">{t("auth.customerLink")}</Link>
+      </p>
     </AuthShell>
   );
 }

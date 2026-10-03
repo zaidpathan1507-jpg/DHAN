@@ -6,6 +6,8 @@ from pymongo.database import Database
 
 
 def log(db: Database, user, action: str, **detail) -> None:
+    if not getattr(user, "business_id", None):  # customers belong to no business, so there is no owner log to write to
+        return
     db.audit.insert_one({
         "business_id": user.business_id, "user_id": user.id, "user_name": user.name, "role": getattr(user, "role", "owner"),
         "action": action, "detail": {k: v for k, v in detail.items() if v is not None}, "at": datetime.now(timezone.utc),

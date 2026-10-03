@@ -1,4 +1,4 @@
-import { BadgeCheck, Bell, CheckCheck, CircleDollarSign, Clock, Eye, FilePlus2, Hand, HandCoins, MessageSquareText, Send, XCircle } from "lucide-react";
+import { BadgeCheck, Bell, CheckCheck, CircleAlert, CircleDollarSign, Clock, Eye, FilePlus2, Hand, HandCoins, MessageSquareText, Send, ShieldQuestion, XCircle } from "lucide-react";
 
 import { formatINR } from "../../lib/constants.js";
 
@@ -34,6 +34,10 @@ export const EVENT_ICON = {
   settled: HandCoins,
   auto_reminder: Bell,
   due_changed: Clock,
+  msg: MessageSquareText,
+  pay_failed: CircleAlert,
+  dispute: ShieldQuestion,
+  dispute_resolved: CheckCheck,
   loan_approved: BadgeCheck,
   loan_declined: XCircle,
   loan_viewed: Eye,
@@ -52,6 +56,10 @@ export const EVENT_TONE = {
   settled: "bg-gain-soft text-gain-ink",
   auto_reminder: "bg-info-soft text-info",
   due_changed: "bg-info-soft text-info",
+  msg: "bg-info-soft text-info",
+  pay_failed: "bg-loss-soft text-loss",
+  dispute: "bg-warn-soft text-warn",
+  dispute_resolved: "bg-gain-soft text-gain-ink",
   loan_approved: "bg-gain-soft text-gain-ink",
   loan_declined: "bg-loss-soft text-loss",
   loan_viewed: "bg-gold-100 text-gold-700",
@@ -74,6 +82,12 @@ export function describeEvent(e, { t, tr, formatDate }) {
       return t("ev.payment", { amount: formatINR(p.amount), mode: tr("pay", p.mode) });
     case "auto_reminder":
       return t("ev.auto_reminder", { step: t(`step.${p.step}`) });
+    case "msg":
+      return t("ev.msg", { who: t(`ev.who.${p.sender === "owner" ? "owner" : "customer"}`), text: p.text });
+    case "pay_failed":
+      return t("ev.pay_failed", { amount: formatINR(p.amount), reason: t(`cu.reason.${p.reason}`) });
+    case "dispute":
+      return t("ev.dispute", { reason: t(`cu.dr.${p.reason}`) }) + (p.text ? ` · ${p.text}` : "");
     case "due_changed":
       return t("ev.due_changed", { old: formatDate(p.old, { day: "numeric", month: "short" }), new: formatDate(p.new, { day: "numeric", month: "short" }) });
     default:
@@ -83,11 +97,11 @@ export function describeEvent(e, { t, tr, formatDate }) {
 
 export function describeNotification(n, { t, formatDate }) {
   const p = n.params || {};
-  const vars = { party: p.party, lender: p.lender, rate: p.rate, amount: formatINR(p.amount), date: p.date ? formatDate(p.date, { day: "numeric", month: "short" }) : "" };
-  const body = { viewed: "notif.viewedBody", promise: "notif.promiseBody", claim: "notif.claimBody", payment_auto: "notif.payment_autoBody", loan_approved: "notif.loan_approvedBody" }[n.type];
+  const vars = { reason: p.reason ? t(`cu.reason.${p.reason}`) : "", party: p.party, lender: p.lender, rate: p.rate, amount: formatINR(p.amount), date: p.date ? formatDate(p.date, { day: "numeric", month: "short" }) : "" };
+  const body = { pay_failed: "notif.pay_failedBody", viewed: "notif.viewedBody", promise: "notif.promiseBody", claim: "notif.claimBody", payment_auto: "notif.payment_autoBody", loan_approved: "notif.loan_approvedBody" }[n.type];
   return {
     title: t(`notif.${n.type}`, vars),
-    body: n.type === "note" ? p.text : n.type === "claim" && p.reference ? `${t(body, vars)} · ${p.reference}` : body ? t(body, vars) : "",
+    body: n.type === "note" || n.type === "msg" ? p.text : n.type === "dispute" ? [p.reason && t(`cu.dr.${p.reason}`), p.text].filter(Boolean).join(" · ") : n.type === "claim" && p.reference ? `${t(body, vars)} · ${p.reference}` : body ? t(body, vars) : "",
   };
 }
 

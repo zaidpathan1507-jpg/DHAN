@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import ai, auth, bot, gst, loans, reports, team, cash_calendar, credit, dashboard, demo, forecast, insights, notifications, passport, receivables, transactions, udhaar_public
+from app.api import advisor, ai, auth, bank, customer, bot, gst, loans, reports, team, cash_calendar, credit, dashboard, demo, forecast, insights, notifications, passport, receivables, transactions, udhaar_public
 from app.core.config import get_settings
 from app.db.session import database, ensure_indexes
 from app.services import reminder_scheduler
@@ -46,6 +46,9 @@ app.include_router(bot.router, prefix="/api/v1")
 app.include_router(loans.router, prefix="/api/v1")
 app.include_router(gst.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
+app.include_router(bank.router, prefix="/api/v1")
+app.include_router(advisor.router, prefix="/api/v1")
+app.include_router(customer.router, prefix="/api/v1")
 app.include_router(loans.public_router, prefix="/api/v1")
 app.include_router(bot.voice_router, prefix="/api/v1")
 

@@ -31,6 +31,8 @@ export default function UdhaarCard({ item, readOnly = false, highlight, onSend, 
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {item.days_overdue > 0 && <Pill tone="bg-loss-soft text-loss">{t("rec.late", { n: item.days_overdue })}</Pill>}
+        {item.disputed && <Pill tone="bg-warn-soft text-warn">{t("ud.disputedChip")}</Pill>}
+        {item.last_failure?.type === "pay_failed" && !item.paid && <Pill tone="bg-loss-soft text-loss">{t("ud.failedChip", { reason: t(`cu.reason.${item.last_failure.params.reason}`) })}</Pill>}
         {item.late_fee > 0 && <Pill tone="bg-warn-soft text-warn">{t("ud.lateFee", { amount: formatINR(item.late_fee) })}</Pill>}
         {receivable && (
           <>

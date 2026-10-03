@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
+import { useState } from "react";
 
 import api from "../../lib/apiClient.js";
 import { useI18n } from "../../lib/i18n.jsx";
 import Drawer from "../common/Drawer.jsx";
+import { useCanEdit } from "../../lib/useRole.js";
 import { describeEvent, EVENT_ICON, EVENT_TONE, relativeTime, STEP_OFFSETS } from "./udhaarUi.js";
 
 export default function TimelineDrawer({ item, onClose }) {
@@ -12,6 +14,14 @@ export default function TimelineDrawer({ item, onClose }) {
   const toggle = useMutation({
     mutationFn: (auto_remind) => api.patch(`/receivables/${item.id}`, { auto_remind }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["receivables"] }),
+  });
+
+  const canEdit = useCanEdit();
+  const [reply, setReply] = useState("");
+  const [resolve, setResolve] = useState(true);
+  const send = useMutation({
+    mutationFn: () => api.post(`/receivables/${item.id}/reply`, { text: reply.trim(), resolve_dispute: item.disputed && resolve }),
+    onSuccess: () => { setReply(""); queryClient.invalidateQueries({ queryKey: ["receivables"] }); },
   });
 
   if (!item) return null;
@@ -54,6 +64,19 @@ export default function TimelineDrawer({ item, onClose }) {
               })}
             </ol>
             <p className="mt-3 text-xs text-ink-muted">{t("ud.ladderNote")}</p>
+          </section>
+        )}
+
+        {item.kind === "receivable" && canEdit && (
+          <section>
+            <h3 className="mb-2 text-base font-extrabold text-ink">{t("ud.reply")}</h3>
+            <form onSubmit={(e) => { e.preventDefault(); if (reply.trim()) send.mutate(); }} className="space-y-2.5">
+              <textarea aria-label={t("ud.reply")} value={reply} onChange={(e) => setReply(e.target.value)} maxLength={400} rows={2} className="field" placeholder={t("ud.replyPlaceholder")} />
+              {item.disputed && (
+                <label className="flex items-center gap-2 text-sm font-bold text-warn"><input type="checkbox" checked={resolve} onChange={(e) => setResolve(e.target.checked)} className="h-4 w-4" /> {t("ud.resolve")}</label>
+              )}
+              <button type="submit" disabled={send.isPending || !reply.trim()} className="btn-ink">{t("ud.replySend")}</button>
+            </form>
           </section>
         )}
 

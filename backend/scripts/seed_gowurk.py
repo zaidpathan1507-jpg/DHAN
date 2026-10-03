@@ -452,5 +452,22 @@ db.loan_applications.insert_one({
 })
 db.notifications.insert_one({"business_id": business_id, "type": "loan_approved", "receivable_id": "", "params": {"lender": "Udyam Capital", "amount": 600000, "rate": 14.8}, "at": at(0, 0), "read": False})
 
+# ---------------------------------------------------------------- customer portal logins + a failed payment to retry
+for coll in (db.bank_ledger,):
+    coll.delete_many({"business_id": business_id})
+db.bank_accounts.delete_many({"business_id": business_id})
+for cphone, cname in [("9822011106", "Sunrise Co-living (Priya)"), ("9822011105", "Zenith Residency (Ramesh)"), ("9822011102", "Blue Orchid Hotels (Anil)")]:
+    if not db.users.find_one({"phone": cphone}):
+        db.users.insert_one({"name": cname, "phone": cphone, "password_hash": hash_password("12345678"), "role": "customer", "created_at": at(5)})
+sun = ObjectId(open_id[su["party"]])
+db.receivables.update_one({"_id": sun}, {"$push": {"events": {"$each": [
+    {"type": "pay_failed", "at": at(0, 2), "params": {"reason": "bank_down", "amount": 118000.0, "method": "netbanking"}},
+    {"type": "msg", "at": at(0, 1), "params": {"sender": "customer", "text": "Net banking was down. I will retry in the evening."}},
+]}}})
+db.notifications.insert_many([
+    {"business_id": business_id, "type": "pay_failed", "receivable_id": str(sun), "params": {"party": "Sunrise Co-living", "amount": 118000.0, "reason": "bank_down"}, "at": at(0, 2), "read": False},
+    {"business_id": business_id, "type": "msg", "receivable_id": str(sun), "params": {"party": "Sunrise Co-living", "text": "Net banking was down. I will retry in the evening."}, "at": at(0, 1), "read": False},
+])
+
 report()
 print(f"Done. Log in with phone {PHONE}.")

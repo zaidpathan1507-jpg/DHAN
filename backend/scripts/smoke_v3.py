@@ -4,6 +4,7 @@ import os
 import sys
 
 os.environ["REMINDERS_ENABLED"] = "false"
+os.environ["GROQ_API_KEY"] = ""  # tests assume the offline rules engine, whatever is in .env
 sys.path.insert(0, ".")
 import mongomock, pymongo  # noqa: E402
 
@@ -169,7 +170,7 @@ assert c.post("/api/v1/bot/confirm", headers=H, json={"pending_id": card["pendin
 tr = c.post("/api/v1/voice/transcribe", headers=H, data={"lang": "hi"}, files={"file": ("v.webm", b"abc", "audio/webm")})
 assert tr.status_code == 200 and tr.json()["text"].startswith("लक्ष्मी")
 groq_service.requests.post = real_post
-os.environ.pop("GROQ_API_KEY")
+os.environ["GROQ_API_KEY"] = ""
 get_settings.cache_clear()
 assert c.post("/api/v1/voice/transcribe", headers=H, data={"lang": "en"}, files={"file": ("v.webm", b"abc", "audio/webm")}).status_code == 503
 print("bot (mocked Groq voice + vision) + whisper endpoint ok")

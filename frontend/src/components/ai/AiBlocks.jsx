@@ -55,7 +55,7 @@ export default function AiBlock({ block }) {
             {block.items.map((m) => (
               <div key={m.label} className="rounded-lg bg-surface-card px-3 py-2.5 shadow-subtle">
                 <dt className="text-xs font-semibold text-ink-muted">{m.label}</dt>
-                <dd className={`num mt-0.5 text-lg font-extrabold ${TONE[m.tone] || "text-ink"}`}>{m.kind === "count" ? m.value : formatINR(m.value)}</dd>
+                <dd className={`num mt-0.5 text-lg font-extrabold ${TONE[m.tone] || "text-ink"}`}>{m.kind === "count" ? m.value : m.kind === "pct" ? `${m.value}%` : formatINR(m.value)}</dd>
                 {m.hint && <p className="text-[11px] font-semibold text-ink-muted">{m.hint}</p>}
               </div>
             ))}
