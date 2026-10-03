@@ -46,4 +46,8 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    s = Settings()
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if render_url and any(h in s.app_base_url for h in ("localhost", "127.0.0.1")):  # a local .env value copied to Render
+        s.app_base_url = render_url
+    return s

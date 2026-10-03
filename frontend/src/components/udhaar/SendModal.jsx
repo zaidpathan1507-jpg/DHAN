@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, MessageCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { localizeLink } from "../../lib/links.js";
 import api from "../../lib/apiClient.js";
 import { useI18n } from "../../lib/i18n.jsx";
 import Modal from "../common/Modal.jsx";
@@ -98,7 +99,7 @@ export default function SendModal({ open, onClose, item, integrations }) {
           </ul>
           <div className="mt-6">
             <p className="mb-3 text-center text-sm font-bold text-ink-soft">{t("ud.viewPhone")}</p>
-            <DemoPhone itemId={item.id} link={result.link} />
+            <DemoPhone itemId={item.id} link={localizeLink(result.link)} />
           </div>
           <button onClick={onClose} className="btn-primary mt-5 w-full">{t("ud.done")}</button>
         </div>

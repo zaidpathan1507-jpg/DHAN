@@ -1,3 +1,4 @@
+import { localizeLink } from "../../lib/links.js";
 import { useQuery } from "@tanstack/react-query";
 import { Check, CheckCheck, ExternalLink, Mail, MessageCircle } from "lucide-react";
 import { useState } from "react";
@@ -9,7 +10,7 @@ import { useI18n } from "../../lib/i18n.jsx";
 const linkRe = /(https?:\/\/\S+)/;
 
 function Bubble({ m, locale }) {
-  const parts = m.body.split(linkRe);
+  const parts = localizeLink(m.body).split(linkRe);
   return (
     <div className="max-w-[88%] rounded-lg rounded-tl-none bg-white px-2.5 py-1.5 text-[13px] leading-snug text-[#111B21] shadow-[0_1px_1px_rgba(0,0,0,0.13)]">
       {parts.map((p, i) =>
@@ -79,7 +80,7 @@ export default function DemoPhone({ itemId, link }) {
               <div key={i} className="rounded-lg bg-white p-3 text-[13px] text-ink shadow-subtle">
                 <p className="text-[11px] text-ink-muted">{t("ph.to", { to: m.to })}</p>
                 <p className="mt-1 font-extrabold">{m.subject}</p>
-                <p className="mt-2 whitespace-pre-line text-ink-soft">{m.body.replace(linkRe, "").trim()}</p>
+                <p className="mt-2 whitespace-pre-line text-ink-soft">{localizeLink(m.body).replace(linkRe, "").trim()}</p>
                 <span className="mt-3 inline-block rounded-lg bg-gold-500 px-3 py-1.5 text-xs font-extrabold text-ink">View &amp; pay</span>
               </div>
             ))}

@@ -18,6 +18,7 @@ import TimelineDrawer from "../components/udhaar/TimelineDrawer.jsx";
 import UdhaarCard from "../components/udhaar/UdhaarCard.jsx";
 import api from "../lib/apiClient.js";
 import { formatINR, QUERY_KEYS_TO_REFRESH } from "../lib/constants.js";
+import { localizeLink } from "../lib/links.js";
 import { useI18n } from "../lib/i18n.jsx";
 import { useCanEdit } from "../lib/useRole.js";
 
@@ -70,7 +71,7 @@ export default function Receivables() {
   }, [focus, data?.items.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = async (item) => {
-    await navigator.clipboard.writeText(item.link);
+    await navigator.clipboard.writeText(localizeLink(item.link));
     showToast(t("ud.linkCopied"));
   };
 
@@ -206,7 +207,7 @@ export default function Receivables() {
       <PaymentModal open={!!payId} onClose={() => setPayId(null)} item={byId(payId)} />
       <TimelineDrawer item={byId(timelineId)} onClose={() => setTimelineId(null)} />
       <Modal open={!!phoneId} onClose={() => setPhoneId(null)} title={t("ph.title")} maxWidth="sm:max-w-md">
-        {phoneId && <DemoPhone itemId={phoneId} link={byId(phoneId)?.link} />}
+        {phoneId && <DemoPhone itemId={phoneId} link={localizeLink(byId(phoneId)?.link)} />}
       </Modal>
     </div>
   );
