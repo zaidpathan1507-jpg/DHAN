@@ -14,6 +14,8 @@ from datetime import date, datetime
 import requests
 
 from app.core.config import get_settings
+from app.db.models import CATEGORIES
+from app.services import groq_service
 
 GSTIN_PATTERN = re.compile(r"\b\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z]\d\b")
 AMOUNT_PATTERN = re.compile(r"(?:₹|rs\.?|inr)\s?([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
@@ -114,7 +116,35 @@ def _extract_category(text: str) -> tuple[str | None, float]:
     return None, 0.0
 
 
-def extract_bill_fields(image_bytes: bytes) -> dict:
+def _from_ai(d: dict) -> dict:
+    """DHAN AI (Groq vision) result -> the same field/confidence shape the review screen already shows."""
+    gstin = (d.get("gstin") or "").upper().replace(" ", "")
+    gstin = gstin if GSTIN_PATTERN.fullmatch(gstin) else None  # a misread GSTIN is worse than none
+    category = d.get("category") if d.get("category") in CATEGORIES else "Others"
+    return {
+        "raw_text": "",
+        "fields": {
+            "amount": {"value": d["amount"], "confidence": 90.0},
+            "vendor": {"value": d.get("vendor") or None, "confidence": 85.0 if d.get("vendor") else 0.0},
+            "date": {"value": d.get("date"), "confidence": 80.0 if d.get("date") else 0.0},
+            "gstin": {"value": gstin, "confidence": 95.0 if gstin else 0.0},
+            "category": {"value": category, "confidence": 75.0},
+            "payment_mode": {"value": d.get("payment_mode"), "confidence": 70.0 if d.get("payment_mode") else 0.0},
+        },
+        "method": "dhan-ai-vision",
+    }
+
+
+def extract_bill_fields(image_bytes: bytes, mime: str = "image/jpeg") -> dict:
+    """AI vision when a Groq key is set (reads any bill layout, any language); otherwise Google Vision text + regex."""
+    ai_failed = False
+    if groq_service.configured():
+        try:
+            return _from_ai(groq_service.read_bill(image_bytes, mime if mime.startswith("image/") else "image/jpeg"))
+        except groq_service.Unavailable:
+            ai_failed = True
+    if not get_settings().google_vision_api_key:
+        raise OCRUnavailable("We couldn't read this bill. Try a clearer, well-lit photo, or enter it manually." if ai_failed else "Bill reading unavailable. Enter the transaction manually.")
     text = _call_google_vision(image_bytes)
 
     amount, amount_conf = _extract_amount(text)

@@ -20,6 +20,7 @@ from app.services.ai_tools import L
 from app.services.insights_service import generate_insights
 
 MAX_TOOL_ROUNDS = 4
+LANG_NAMES = {"hi": "Hindi", "mr": "Marathi"}
 SYSTEM = """You are DHAN AI, the financial copilot inside DHAN, an app for small business owners in India.
 Rules:
 - Get every figure from the tools. Never guess or invent numbers; if the data isn't there, say so plainly.
@@ -58,12 +59,17 @@ def mode() -> dict:
 def _chat(messages: list[dict], with_tools: bool = True) -> dict:
     s = get_settings()
     body = {"model": s.groq_model, "messages": messages, "temperature": 0.2}
+    if s.groq_model.startswith("openai/gpt-oss"):
+        body["reasoning_effort"] = "low"  # snappy answers; the numbers come from tools, not from long reasoning
     if with_tools:
         body.update(tools=tools.SCHEMAS, tool_choice="auto")
     for attempt in (1, 2):
         r = requests.post(f"{s.groq_base_url.rstrip('/')}/chat/completions", headers={"Authorization": f"Bearer {s.groq_api_key}"}, json=body, timeout=45)
         if r.status_code == 400 and attempt == 1 and "tool_use_failed" in r.text:
-            continue  # Llama occasionally emits a malformed tool call; one retry almost always succeeds
+            continue  # the model occasionally emits a malformed tool call; one retry almost always succeeds
+        if r.status_code == 429 and attempt == 1:  # free-tier tokens-per-minute limit: wait the few seconds Groq asks for, once
+            time.sleep(min(float(r.headers.get("retry-after") or 6), 12))
+            continue
         r.raise_for_status()
         return r.json()["choices"][0]["message"]
 
@@ -290,7 +296,30 @@ def rate_limited(user_id: str, per_minute: int = 20) -> bool:
     return len(hits) >= per_minute
 
 
+def to_marathi(texts: list[str]) -> list[str] | None:
+    """Rule-based replies only have English and Hindi wording; for a Marathi user, Groq rewrites them in Marathi (numbers,
+    names and dates untouched). None when there is no key or the call fails, so the caller keeps the Hindi text."""
+    if not get_settings().groq_api_key or not texts:
+        return None
+    try:
+        msg = _chat([{"role": "system", "content": "Translate each string of this JSON array into natural spoken Marathi (Devanagari). Keep every number, rupee amount, date and person or business name exactly as written. Reply with ONLY the JSON array, same length and order."},
+                     {"role": "user", "content": json.dumps(texts, ensure_ascii=False)}], with_tools=False)
+        out = json.loads(re.search(r"\[.*\]", msg["content"], re.S).group(0))
+        return out if isinstance(out, list) and len(out) == len(texts) and all(isinstance(x, str) for x in out) else None
+    except Exception:
+        return None
+
+
 def ask(db: Database, bid: str, question: str, history: list[dict] | None, lang: str, today: date | None = None) -> dict:
+    out = _ask(db, bid, question, history, lang, today)
+    out["spoken_lang"] = lang
+    if lang == "mr" and out.get("mode") == "rules":  # LLM answers are already Marathi; rules text is Hindi until rewritten
+        mr = to_marathi([out["answer"]])
+        out["answer"], out["spoken_lang"] = (mr[0], "mr") if mr else (out["answer"], "hi")
+    return out
+
+
+def _ask(db: Database, bid: str, question: str, history: list[dict] | None, lang: str, today: date | None = None) -> dict:
     today = today or date.today()
     question = question.strip()[:500]
     if get_settings().groq_api_key:
@@ -329,14 +358,22 @@ def brief(db: Database, bid: str, lang: str, today: date | None = None) -> dict:
     ins = generate_insights(db, bid)
     if ins:
         b.append({"icon": "alert", "tone": "warn", "text": f"{ins[0]['title'].capitalize()} {ins[0]['headline']}."})
+    spoken = lang
+    if lang == "mr":
+        mr = to_marathi([x["text"] for x in b])
+        if mr:
+            for x, text in zip(b, mr):
+                x["text"] = text
+        else:
+            spoken = "hi"
     script = " ".join(x["text"] for x in b)
     out_mode = "rules"
     if get_settings().groq_api_key:
         try:
-            msg = _chat([{"role": "system", "content": f"You are DHAN AI. Rewrite these facts as a warm, spoken 2-3 sentence daily update for a shop owner, in {'Hindi' if lang == 'hi' else 'English'}. Keep every number exactly as given. No lists, no emoji."},
+            msg = _chat([{"role": "system", "content": f"You are DHAN AI. Rewrite these facts as a warm, spoken 2-3 sentence daily update for a shop owner, in {LANG_NAMES.get(lang, 'English')}. Keep every number exactly as given. No lists, no emoji."},
                          {"role": "user", "content": script}], with_tools=False)
             if msg.get("content"):
                 script, out_mode = msg["content"].strip(), "groq"
         except Exception:
             pass
-    return {"bullets": b, "script": script, "mode": out_mode, "date": today.isoformat()}
+    return {"bullets": b, "script": script, "mode": out_mode, "date": today.isoformat(), "spoken_lang": spoken}

@@ -6,7 +6,8 @@ import api from "./apiClient.js";
 const Recognition = typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 const TAGS = { en: "en-IN", hi: "hi-IN", mr: "mr-IN" };
 export const canListen = !!Recognition;
-export const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
+const canSpeakNative = typeof window !== "undefined" && "speechSynthesis" in window;
+export const canSpeak = typeof Audio !== "undefined";
 const canRecord = typeof window !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined";
 
 // Browser speech recognition (Chrome/Edge). Calls onFinal(text) once when the user stops talking.
@@ -112,21 +113,59 @@ export function useVoiceInput(lang, onFinal) {
   };
 }
 
-// Text-to-speech in the app language when the browser has a matching voice (Marathi falls back to Hindi).
-export function speak(text, lang, onEnd) {
-  if (!canSpeak) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = TAGS[lang] || "en-IN";
+// ---- Reading answers aloud.
+// The server makes natural Hindi / Marathi / English audio (browsers often lack a Marathi voice and read Devanagari with the
+// wrong accent). If that is unreachable we fall back to the browser's own voice, picking the closest one.
+let player = null;
+let ticket = 0;
+
+function pickVoice(lang) {
   const voices = window.speechSynthesis.getVoices();
-  const voice =
-    voices.find((v) => v.lang.replace("_", "-").startsWith(u.lang)) ||
-    voices.find((v) => v.lang.startsWith(lang === "en" ? "en" : "hi"));
-  if (voice) u.voice = voice;
-  u.rate = 0.98;
-  u.onend = onEnd;
-  u.onerror = onEnd;
-  window.speechSynthesis.speak(u);
+  const norm = (v) => v.lang.replace("_", "-").toLowerCase();
+  const prefer = (list) => list.find((v) => /natural|online|google/i.test(v.name)) || list[0];
+  const want = (TAGS[lang] || "en-IN").toLowerCase();
+  const exact = voices.filter((v) => norm(v) === want);
+  const sameLang = voices.filter((v) => norm(v).startsWith(want.slice(0, 2)));
+  const hindi = voices.filter((v) => norm(v).startsWith("hi")); // Marathi shares the script and most sounds with Hindi
+  return prefer(exact) || prefer(sameLang) || (lang === "mr" ? prefer(hindi) : undefined);
 }
 
-export const stopSpeaking = () => canSpeak && window.speechSynthesis.cancel();
+function browserSpeak(text, lang, onEnd) {
+  if (!canSpeakNative) return onEnd?.();
+  const run = () => {
+    const u = new SpeechSynthesisUtterance(text);
+    const voice = pickVoice(lang);
+    u.voice = voice || null;
+    u.lang = voice ? voice.lang : lang === "en" ? "en-IN" : "hi-IN";
+    u.rate = 0.95;
+    u.onend = onEnd;
+    u.onerror = onEnd;
+    window.speechSynthesis.speak(u);
+  };
+  window.speechSynthesis.cancel();
+  if (window.speechSynthesis.getVoices().length) run();
+  else window.speechSynthesis.addEventListener("voiceschanged", run, { once: true }); // voices load asynchronously
+}
+
+export async function speak(text, lang, onEnd) {
+  stopSpeaking();
+  const mine = ++ticket;
+  try {
+    const { data } = await api.post("/voice/speak", { text, lang }, { responseType: "blob" });
+    if (mine !== ticket) return;
+    const url = URL.createObjectURL(data);
+    player = new Audio(url);
+    const done = () => { URL.revokeObjectURL(url); if (mine === ticket) onEnd?.(); };
+    player.onended = done;
+    player.onerror = done;
+    await player.play();
+  } catch {
+    if (mine === ticket) browserSpeak(text, lang, onEnd);
+  }
+}
+
+export function stopSpeaking() {
+  ticket += 1;
+  if (player) { player.pause(); player = null; }
+  if (canSpeakNative) window.speechSynthesis.cancel();
+}

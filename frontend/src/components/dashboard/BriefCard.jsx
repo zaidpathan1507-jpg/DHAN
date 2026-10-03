@@ -25,7 +25,7 @@ export default function BriefCard() {
       setSpeaking(false);
     } else {
       setSpeaking(true);
-      speak(query.data.script, lang, () => setSpeaking(false));
+      speak(query.data.script, query.data.spoken_lang || lang, () => setSpeaking(false));
     }
   };
 

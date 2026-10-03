@@ -8,7 +8,9 @@ An AI finance desk for small Indian businesses: expense tracking, udhaar (credit
 
 - **Backend:** FastAPI, PyMongo / MongoDB (mongomock for tests), JWT auth, bcrypt, pydantic v2, Server-Sent Events, a background scheduler
 - **Frontend:** React 18, Vite, Tailwind CSS, TanStack Query, Recharts, Framer Motion
-- **AI:** Groq (Llama 3.3 70B tool-calling, Whisper speech-to-text, Llama 4 Scout vision). A rules engine answers when no key is set.
+- **AI:** Groq (`openai/gpt-oss-120b` tool-calling, Whisper speech-to-text, `qwen/qwen3.8-27b` bill-photo vision). A rules engine answers when no key is set. Model names live in `backend/.env.example`; Groq retires models from time to time, so check `console.groq.com/docs/models` if AI stops answering.
+- **Voice:** spoken answers use natural Microsoft neural voices (English, Hindi, Marathi) through `edge-tts`, with the browser voice as a fallback.
+- **Payments:** Razorpay Checkout (test keys give test mode).
 
 ## Features
 
@@ -16,7 +18,7 @@ An AI finance desk for small Indian businesses: expense tracking, udhaar (credit
 - **Dashboard:** cash in hand, 30-day outlook, income / expense / net with period comparison, spending mix, top vendors, alerts, a daily brief from DHAN AI, and a "Money waiting for you" card.
 - **Transactions:** manual entry, filters, detail drawer, CSV export.
 - **Voice entry** in English, Hindi and Marathi. Uses Groq Whisper when a key is set, the browser's speech recognition otherwise. The form is pre-filled for review; nothing saves without confirmation.
-- **Bill scanning:** Google Vision OCR (optional) or Groq vision, with manual-entry fallback.
+- **Bill scanning:** photo or upload a bill and DHAN AI (Groq vision) fills in vendor, amount, date, GSTIN, category and payment mode for you to review. Falls back to Google Vision OCR if configured, then to manual entry.
 - **Bank-statement import:** upload a CSV, review guessed categories, import. Duplicates are skipped, so re-importing is safe. Sample: `frontend/public/sample-bank-statement.csv`.
 
 ### Udhaar (receivables and payables)
@@ -72,7 +74,8 @@ Edit `backend/.env`:
 - `MONGODB_URI` (and optionally `MONGODB_DB`) is required.
 - `GROQ_API_KEY` turns on the LLM, Whisper voice and bill-photo reading. Restart after changing `.env`.
 - `GOOGLE_VISION_API_KEY` is an optional OCR key.
-- `SMTP_*`, `WHATSAPP_*`, `RAZORPAY_*` are optional; leave blank to simulate.
+- `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` (use `rzp_test_...` keys for test mode) turn on the real Razorpay payment window for customers, in the portal and on `/pay/<token>`. Without them the customer portal shows a practice checkout. Set them in Render's Environment too.
+- `SMTP_*`, `WHATSAPP_*` are optional; leave blank to simulate.
 - `APP_BASE_URL` is the frontend URL used in payment links.
 
 API runs at `http://localhost:8000`, docs at `http://localhost:8000/docs`.

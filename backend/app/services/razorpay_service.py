@@ -52,3 +52,27 @@ def verify_webhook(body: bytes, signature: str | None) -> bool:
         return False
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def create_order(amount: float, receipt: str) -> dict | None:
+    """A Razorpay Order for Checkout. {"id", "amount"} or None when unconfigured / the call fails. Test keys (rzp_test_...) run in test mode."""
+    s = get_settings()
+    if not enabled():
+        return None
+    try:
+        r = requests.post("https://api.razorpay.com/v1/orders", auth=(s.razorpay_key_id, s.razorpay_key_secret),
+                          json={"amount": round(amount * 100), "currency": "INR", "receipt": receipt[:40], "payment_capture": 1}, timeout=15)
+        r.raise_for_status()
+        d = r.json()
+        return {"id": d["id"], "amount": d["amount"]}
+    except Exception:
+        return None
+
+
+def verify_signature(order_id: str, payment_id: str, signature: str) -> bool:
+    """Checkout success callback: HMAC-SHA256(order_id|payment_id) with the key secret must equal the signature."""
+    s = get_settings()
+    if not enabled() or not signature:
+        return False
+    expected = hmac.new(s.razorpay_key_secret.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)

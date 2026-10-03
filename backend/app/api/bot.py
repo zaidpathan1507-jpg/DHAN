@@ -3,13 +3,13 @@ would call bot_service.handle() the same way."""
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pymongo.database import Database
 
 from app.core.deps import get_current_user, get_db
-from app.services import bot_service, groq_service
+from app.services import bot_service, groq_service, tts_service
 
 router = APIRouter(tags=["bot"])
 voice_router = APIRouter(prefix="/voice", tags=["voice"])
@@ -79,3 +79,20 @@ async def transcribe(file: UploadFile = File(...), lang: Literal["en", "hi", "mr
     except groq_service.Unavailable:
         raise HTTPException(status_code=502, detail="Couldn't transcribe that. Please try again.")
     return {"text": text}
+
+
+class Speak(BaseModel):
+    text: str = Field(min_length=1, max_length=1500)
+    lang: Literal["en", "hi", "mr"] = "en"
+
+
+@voice_router.post("/speak")
+async def speak(payload: Speak, current_user=Depends(get_current_user)):
+    """Text -> natural-sounding mp3 in English, Hindi or Marathi. 503 lets the app fall back to the browser's voice."""
+    try:
+        audio = await tts_service.synthesize(payload.text, payload.lang)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Voice is unavailable right now.")
+    if not audio:
+        raise HTTPException(status_code=503, detail="Voice is unavailable right now.")
+    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=3600"})

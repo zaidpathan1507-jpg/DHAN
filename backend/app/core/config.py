@@ -33,10 +33,10 @@ class Settings(BaseSettings):
 
     # DHAN AI (Groq, OpenAI-compatible API). Unset = built-in rules engine answers from the same data tools.
     groq_api_key: str | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_stt_model: str = "whisper-large-v3-turbo"  # speech-to-text (Hindi/Marathi/English voice)
-    groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"  # reads bill photos
+    groq_vision_model: str = "qwen/qwen3.8-27b"  # reads bill photos
 
     cors_origins: list[str] = [
         "http://localhost:5173",

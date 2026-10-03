@@ -19,7 +19,7 @@ from pymongo.database import Database
 
 from app.core.deps import get_current_user, get_db
 from app.db.session import day, get_business, oid
-from app.services import udhaar_service as u
+from app.services import pay_service, udhaar_service as u
 
 router = APIRouter(prefix="/customer", tags=["customer"])
 
@@ -51,6 +51,22 @@ class Message(BaseModel):
 class Dispute(BaseModel):
     reason: Literal["wrong_amount", "not_received", "already_paid", "other"]
     text: str | None = Field(default=None, max_length=400)
+
+
+class RzpOrder(BaseModel):
+    amount: float | None = Field(default=None, gt=0)
+
+
+class RzpVerify(BaseModel):
+    razorpay_order_id: str = Field(max_length=60)
+    razorpay_payment_id: str = Field(max_length=60)
+    razorpay_signature: str = Field(max_length=200)
+
+
+class RzpFailed(BaseModel):
+    order_id: str | None = Field(default=None, max_length=60)
+    reason: str = Field(default="declined", max_length=30)
+    detail: str | None = Field(default=None, max_length=200)
 
 
 def _mine(db: Database, phone: str) -> list[dict]:
@@ -85,7 +101,7 @@ def _view(db: Database, doc: dict, today: date, detail: bool = False) -> dict:
         "id": str(doc["_id"]), "shop": {"id": doc["business_id"], "name": biz["name"], "city": biz["city"]}, "note": doc.get("note"), "amount": doc["amount"],
         "paid_amount": u.paid_of(doc), "outstanding": u.outstanding_of(doc), "due_date": u.due_of(doc), "days_overdue": u.days_overdue(doc, today),
         "late_fee": u.late_fee_of(doc, today), "paid": doc["paid"], "promise_date": doc["promise_date"].date() if doc.get("promise_date") else None,
-        "disputed": bool(doc.get("disputed")), "claim": bool(doc.get("claim")),
+        "disputed": bool(doc.get("disputed")), "claim": bool(doc.get("claim")), "razorpay": pay_service.mode(),
         "failed": {"reason": recent_fail["params"].get("reason"), "amount": recent_fail["params"].get("amount"), "at": recent_fail["at"], "count": len(failures)} if recent_fail else None,
     }
     if detail:
@@ -143,6 +159,30 @@ def pay(item_id: str, payload: Pay, db: Database = Depends(get_db), user=Depends
     after = u.apply_payment(db, doc, amount, {"upi": "UPI", "card": "Card", "netbanking": "Bank Transfer"}[payload.method], "customer")
     u.notify(db, doc["business_id"], "payment_auto", doc["_id"], party=_party(doc), amount=amount)
     return {"status": "paid", "amount": amount, "receipt": "DHN" + secrets.token_hex(4).upper(), "outstanding": u.outstanding_of(after), "settled": after["paid"]}
+
+
+def _wrap(fn, *a):
+    try:
+        return fn(*a)
+    except pay_service.PayError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+
+
+@router.post("/invoices/{item_id}/rzp/order")
+def rzp_order(item_id: str, payload: RzpOrder, db: Database = Depends(get_db), user=Depends(get_customer)):
+    return _wrap(pay_service.create_order, db, _get(db, user, item_id), payload.amount)
+
+
+@router.post("/invoices/{item_id}/rzp/verify")
+def rzp_verify(item_id: str, payload: RzpVerify, db: Database = Depends(get_db), user=Depends(get_customer)):
+    doc = _get(db, user, item_id)
+    return _wrap(pay_service.verify, db, doc, payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature, _party(doc))
+
+
+@router.post("/invoices/{item_id}/rzp/failed")
+def rzp_failed(item_id: str, payload: RzpFailed, db: Database = Depends(get_db), user=Depends(get_customer)):
+    doc = _get(db, user, item_id)
+    return pay_service.failed(db, doc, payload.order_id, payload.reason, payload.detail, _party(doc))
 
 
 @router.post("/invoices/{item_id}/promise")

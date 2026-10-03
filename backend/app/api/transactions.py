@@ -4,6 +4,7 @@ from enum import Enum
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from pymongo import DESCENDING
 from pymongo.database import Database
 
@@ -165,7 +166,8 @@ async def ocr_bill(
 ):
     try:
         image_bytes = await file.read()
-        result = extract_bill_fields(image_bytes)
-        return result
+        if len(image_bytes) > 8_000_000:
+            raise HTTPException(status_code=413, detail="That photo is too large. Try a smaller one.")
+        return await run_in_threadpool(extract_bill_fields, image_bytes, file.content_type or "image/jpeg")
     except OCRUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))

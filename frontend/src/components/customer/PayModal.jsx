@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, CreditCard, Landmark, Loader2, Smartphone } from "lucide-react";
+import { CheckCircle2, CircleAlert, CreditCard, Landmark, Loader2, ShieldCheck, Smartphone } from "lucide-react";
 import { useState } from "react";
 
+import { useRazorpayPay } from "../../lib/razorpay.js";
 import api from "../../lib/apiClient.js";
 import { formatINR } from "../../lib/constants.js";
 import { useI18n } from "../../lib/i18n.jsx";
@@ -27,6 +28,9 @@ export default function PayModal({ invoice, onClose, onPromise }) {
     onSuccess: (r) => { setResult(r); queryClient.invalidateQueries({ queryKey: ["customer"] }); },
   });
   const shop = invoice.shop.name;
+  const rz = invoice.razorpay; // "test" | "live" | null: real Razorpay Checkout when set up, the practice picker otherwise
+  const rzp = useRazorpayPay(`/customer/invoices/${invoice.id}`, (r) => { setResult(r); queryClient.invalidateQueries({ queryKey: ["customer"] }); });
+  const busy = pay.isPending || rzp.busy;
 
   return (
     <Modal open onClose={onClose} title={t("cu.pm.title", { shop })} maxWidth="sm:max-w-md">
@@ -43,7 +47,7 @@ export default function PayModal({ invoice, onClose, onPromise }) {
         <div className="text-center">
           <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-loss-soft text-loss"><CircleAlert size={34} /></span>
           <h3 className="mt-4 text-xl font-extrabold text-ink">{t("cu.pm.failTitle")}</h3>
-          <p className="mt-2 text-[15px] text-ink-soft">{t("cu.pm.failBody", { reason: t(`cu.reason.${result.reason}`), shop })}</p>
+          <p className="mt-2 text-[15px] text-ink-soft">{t("cu.pm.failBody", { reason: t(`cu.reason.${result.reason}`), shop })}{result.detail ? ` (${result.detail})` : ""}</p>
           <div className="mt-6 space-y-2.5">
             <button onClick={() => { setResult(null); setTest("success"); }} className="btn-primary w-full">{t("cu.retry")}</button>
             <button onClick={() => { setResult(null); setMethod(method === "upi" ? "card" : "upi"); setTest("success"); }} className="btn-secondary w-full">{t("cu.pm.other")}</button>
@@ -51,7 +55,7 @@ export default function PayModal({ invoice, onClose, onPromise }) {
           </div>
         </div>
       ) : (
-        <form onSubmit={(e) => { e.preventDefault(); pay.mutate(); }} className="space-y-5">
+        <form onSubmit={(e) => { e.preventDefault(); rz ? rzp.pay(amount) : pay.mutate(); }} className="space-y-5">
           <div>
             <p className="field-label">{t("cu.pm.amount")}</p>
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t("cu.pm.amount")}>
@@ -65,6 +69,7 @@ export default function PayModal({ invoice, onClose, onPromise }) {
             {mode === "part" && <input aria-label={t("cu.pm.part")} type="number" min="1" max={invoice.outstanding} step="any" inputMode="decimal" required value={custom} onChange={(e) => setCustom(e.target.value)} className="field num mt-2" placeholder="₹" autoFocus />}
           </div>
 
+          {!rz && (
           <div>
             <p className="field-label">{t("cu.pm.method")}</p>
             <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={t("cu.pm.method")}>
@@ -75,7 +80,14 @@ export default function PayModal({ invoice, onClose, onPromise }) {
               ))}
             </div>
           </div>
+          )}
 
+          {rz ? (
+            <div className="rounded-xl bg-info-soft p-3.5 text-[13px] font-semibold leading-snug text-info">
+              <p className="flex items-center gap-1.5 font-extrabold"><ShieldCheck size={15} /> {t("cu.pm.rzp")}</p>
+              {rz === "test" && <p className="mt-1.5">{t("cu.pm.testHint")}</p>}
+            </div>
+          ) : (
           <div className="rounded-xl bg-info-soft p-3.5">
             <p className="text-[13px] font-semibold leading-snug text-info">{t("cu.pm.sandbox")}</p>
             <label htmlFor="pm-outcome" className="field-label mt-3">{t("cu.pm.outcome")}</label>
@@ -83,11 +95,12 @@ export default function PayModal({ invoice, onClose, onPromise }) {
               {OUTCOMES.map((o) => <option key={o} value={o}>{t(`cu.pm.o.${o}`)}</option>)}
             </select>
           </div>
+          )}
 
-          <button type="submit" disabled={pay.isPending || amount <= 0} className="btn-primary w-full">
-            {pay.isPending ? <><Loader2 size={18} className="animate-spin" /> {t("cu.pm.processing")}</> : t("cu.pm.go", { amount: formatINR(amount) })}
+          <button type="submit" disabled={busy || amount <= 0} className="btn-primary w-full">
+            {busy ? <><Loader2 size={18} className="animate-spin" /> {t("cu.pm.processing")}</> : t("cu.pm.go", { amount: formatINR(amount) })}
           </button>
-          {pay.isError && <p role="alert" className="rounded-xl bg-loss-soft px-3.5 py-2.5 text-sm font-semibold text-loss">{pay.error?.response?.data?.detail || t("common.error")}</p>}
+          {(pay.isError || rzp.error) && <p role="alert" className="rounded-xl bg-loss-soft px-3.5 py-2.5 text-sm font-semibold text-loss">{rzp.error === "blocked" ? t("cu.pm.blocked") : pay.error?.response?.data?.detail || rzp.error || t("common.error")}</p>}
         </form>
       )}
     </Modal>

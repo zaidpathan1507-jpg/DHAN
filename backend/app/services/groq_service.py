@@ -56,7 +56,7 @@ def read_bill(image: bytes, mime: str) -> dict:
         raise Unavailable("not-configured")
     s = get_settings()
     body = {
-        "model": s.groq_vision_model, "temperature": 0, "max_tokens": 400,
+        "model": s.groq_vision_model, "temperature": 0, "max_tokens": 1200,
         "messages": [{"role": "user", "content": [{"type": "text", "text": READ_PROMPT}, {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64.b64encode(image).decode()}"}}]}],
     }
     try:

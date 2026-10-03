@@ -57,7 +57,7 @@ function Assistant({ m, lang }) {
             <div className="mt-2 flex gap-1">
               {canSpeak && (
                 <button
-                  onClick={() => (speaking ? (stopSpeaking(), setSpeaking(false)) : (setSpeaking(true), speak(m.content, lang, () => setSpeaking(false))))}
+                  onClick={() => (speaking ? (stopSpeaking(), setSpeaking(false)) : (setSpeaking(true), speak(m.content, m.spoken_lang || lang, () => setSpeaking(false))))}
                   className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-ink-muted hover:bg-surface-muted hover:text-ink"
                 >
                   {speaking ? <VolumeX size={15} /> : <Volume2 size={15} />} {speaking ? t("ai.stopSpeaking") : t("ai.listen")}
@@ -107,7 +107,7 @@ export default function Ask() {
       const history = messages.filter((m) => !m.error).slice(-8).map((m) => ({ role: m.role, content: m.content }));
       return api.post("/ai/ask", { question, history, lang }).then((r) => r.data);
     },
-    onSuccess: (data) => setMessages((ms) => [...ms, { role: "assistant", content: data.answer, blocks: data.blocks, trace: data.trace, mode: data.mode, note: data.note }]),
+    onSuccess: (data) => setMessages((ms) => [...ms, { role: "assistant", content: data.answer, blocks: data.blocks, trace: data.trace, mode: data.mode, note: data.note, spoken_lang: data.spoken_lang }]),
     onError: (e) => setMessages((ms) => [...ms, { role: "assistant", error: true, content: t(e.response?.status === 429 ? "ai.rateLimit" : "ai.error") }]),
   });
 

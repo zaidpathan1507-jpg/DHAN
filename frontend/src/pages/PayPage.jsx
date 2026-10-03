@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Copy, CreditCard, Smartphone } from "lucide-react";
+import { CheckCircle2, CircleAlert, Copy, CreditCard, Loader2, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -7,6 +7,7 @@ import { useParams } from "react-router-dom";
 import LanguageToggle from "../components/common/LanguageToggle.jsx";
 import { LogoMark } from "../components/common/Logo.jsx";
 import api from "../lib/apiClient.js";
+import { useRazorpayPay } from "../lib/razorpay.js";
 import { formatINR } from "../lib/constants.js";
 import { useI18n } from "../lib/i18n.jsx";
 
@@ -33,6 +34,8 @@ export default function PayPage() {
   const [message, setMessage] = useState("");
   const [done, setDone] = useState({});
   const [copied, setCopied] = useState(false);
+  const [outcome, setOutcome] = useState(null);
+  const rzp = useRazorpayPay(`/public/udhaar/${token}`, (r) => { setOutcome(r); queryClient.invalidateQueries({ queryKey: ["pay", token] }); });
 
   const query = useQuery({ queryKey: ["pay", token], queryFn: () => api.get(`/public/udhaar/${token}`).then((r) => r.data), retry: false, refetchInterval: 15000 });
   const post = (path, body, key) => useMutation({ // eslint-disable-line react-hooks/rules-of-hooks
@@ -130,9 +133,21 @@ export default function PayPage() {
                 </button>
               </div>
             ) : (
-              !d.razorpay_url && <p className="text-[15px] text-ink-soft">{t("pay.noMethod", { business: b })}</p>
+              !d.razorpay_url && !d.razorpay && <p className="text-[15px] text-ink-soft">{t("pay.noMethod", { business: b })}</p>
             )}
-            {d.razorpay_url && (
+            {d.razorpay && (
+              <div className={d.upi_link ? "mt-4" : ""}>
+                <button onClick={() => { setOutcome(null); rzp.pay(d.outstanding); }} disabled={rzp.busy} className="btn-primary w-full">
+                  {rzp.busy ? <Loader2 size={18} className="animate-spin" /> : <CreditCard size={18} />} {t("pay.online")} · {formatINR(d.outstanding)}
+                </button>
+                {d.razorpay === "test" && <p className="mt-2 rounded-xl bg-info-soft px-3 py-2 text-xs font-semibold text-info">{t("cu.pm.testHint")}</p>}
+                {outcome?.status === "failed" && (
+                  <p role="alert" className="mt-2 flex items-start gap-2 rounded-xl bg-loss-soft px-3 py-2.5 text-sm font-semibold text-loss"><CircleAlert size={17} className="mt-0.5 shrink-0" /> {t("cu.pm.failBody", { reason: t(`cu.reason.${outcome.reason}`), shop: b })}</p>
+                )}
+                {rzp.error && <p role="alert" className="mt-2 rounded-xl bg-loss-soft px-3 py-2.5 text-sm font-semibold text-loss">{rzp.error === "blocked" ? t("cu.pm.blocked") : t("pay.error")}</p>}
+              </div>
+            )}
+            {!d.razorpay && d.razorpay_url && (
               <a href={d.razorpay_url} target="_blank" rel="noreferrer" className={`btn-primary w-full ${d.upi_link ? "mt-4" : ""}`}>
                 <CreditCard size={18} /> {t("pay.online")}
               </a>

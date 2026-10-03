@@ -177,5 +177,85 @@ assert c.post(f"{P}/customer/invoices/{inv_id}/pay", headers=C, json={}).status_
 assert c.get(f"{P}/customer/overview", headers=C).json()["totals"]["open"] == 0
 login = c.post(f"{P}/auth/login", json={"phone": CPHONE, "password": "secret1"})
 assert login.status_code == 200
+
+# ---------------------------------------------------------------- Razorpay Checkout (mocked network, real signature check)
+import hashlib, hmac as _hmac  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
+from app.services import razorpay_service as rz  # noqa: E402
+
+os.environ["RAZORPAY_KEY_ID"], os.environ["RAZORPAY_KEY_SECRET"] = "rzp_test_abc", "sekret"
+get_settings.cache_clear()
+
+
+class _R:
+    status_code = 200
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"id": "order_T1", "amount": 150000}
+
+
+rz.requests.post = lambda *a, **k: _R()
+mk("Razor Customer – Invoice", "9822011188", 4000, "tok-rzp")
+rc = c.post(f"{P}/auth/customer/otp", json={"phone": "9822011188"}).json()["demo_code"]
+RC = {"Authorization": "Bearer " + c.post(f"{P}/auth/customer/register", json={"phone": "9822011188", "code": rc, "name": "Razor", "password": "secret1"}).json()["access_token"]}
+rid = c.get(f"{P}/customer/overview", headers=RC).json()["shops"][0]["open"][0]["id"]
+assert c.get(f"{P}/customer/invoices/{rid}", headers=RC).json()["razorpay"] == "test"
+o = c.post(f"{P}/customer/invoices/{rid}/rzp/order", headers=RC, json={"amount": 1500}).json()
+assert o["key"] == "rzp_test_abc" and o["order_id"] == "order_T1" and o["amount"] == 150000 and o["test"] is True, o
+bad = c.post(f"{P}/customer/invoices/{rid}/rzp/verify", headers=RC, json={"razorpay_order_id": "order_T1", "razorpay_payment_id": "pay_1", "razorpay_signature": "nope"})
+assert bad.status_code == 400
+sig = _hmac.new(b"sekret", b"order_T1|pay_1", hashlib.sha256).hexdigest()
+ok = c.post(f"{P}/customer/invoices/{rid}/rzp/verify", headers=RC, json={"razorpay_order_id": "order_T1", "razorpay_payment_id": "pay_1", "razorpay_signature": sig}).json()
+assert ok["status"] == "paid" and ok["amount"] == 1500 and ok["outstanding"] == 2500, ok
+assert c.post(f"{P}/customer/invoices/{rid}/rzp/verify", headers=RC, json={"razorpay_order_id": "order_T1", "razorpay_payment_id": "pay_1", "razorpay_signature": sig}).status_code == 409  # replay
+fl = c.post(f"{P}/customer/invoices/{rid}/rzp/failed", headers=RC, json={"order_id": "order_T1", "reason": "cancelled"}).json()
+assert fl["status"] == "failed" and fl["reason"] == "cancelled"
+assert c.get(f"{P}/notifications", headers=H).json()["items"][0]["type"] == "pay_failed"
+# the login-free pay page uses the same flow
+rz.requests.post = lambda *a, **k: type("R2", (_R,), {"json": lambda self: {"id": "order_T2", "amount": 250000}})()
+po = c.post(f"{P}/public/udhaar/tok-rzp/rzp/order", json={}).json()
+assert po["order_id"] == "order_T2" and po["amount"] == 250000, po
+sig2 = _hmac.new(b"sekret", b"order_T2|pay_2", hashlib.sha256).hexdigest()
+pv = c.post(f"{P}/public/udhaar/tok-rzp/rzp/verify", json={"razorpay_order_id": "order_T2", "razorpay_payment_id": "pay_2", "razorpay_signature": sig2}).json()
+assert pv["settled"] is True, pv
+assert c.post(f"{P}/public/udhaar/tok-rzp/rzp/order", json={}).status_code == 409  # nothing left to pay
+print("razorpay checkout flow ok")
 print("customer portal ok")
+
+# ---------------------------------------------------------------- bill scan (AI vision first) and spoken answers
+from app.services import groq_service, tts_service  # noqa: E402
+
+os.environ["GROQ_API_KEY"] = "gsk-test"
+get_settings.cache_clear()
+groq_service.read_bill = lambda img, mime: {"vendor": "Laxmi Stationery", "amount": 750.0, "date": "2026-09-28", "gstin": "27ABCDE1234F1Z5", "category": "Not A Category", "payment_mode": "UPI"}
+r = c.post(f"{P}/transactions/ocr", headers=H, files={"file": ("b.jpg", b"x" * 50, "image/jpeg")})
+assert r.status_code == 200 and r.json()["method"] == "dhan-ai-vision", r.text
+f = r.json()["fields"]
+assert f["amount"]["value"] == 750 and f["category"]["value"] == "Others" and f["gstin"]["value"] == "27ABCDE1234F1Z5" and f["payment_mode"]["value"] == "UPI"
+
+
+def _unreadable(img, mime):
+    raise groq_service.Unavailable("unreadable")
+
+
+groq_service.read_bill = _unreadable
+bad = c.post(f"{P}/transactions/ocr", headers=H, files={"file": ("b.jpg", b"x" * 50, "image/jpeg")})
+assert bad.status_code == 503 and "clearer" in bad.json()["detail"]
+assert tts_service.clean("आज ₹1,23,456 मिळाले **खरे**", "mr") == "आज 123456 रुपये मिळाले खरे"
+
+
+async def _fake(text, lang):
+    return b"ID3" + lang.encode()
+
+
+tts_service.synthesize = _fake
+sp = c.post(f"{P}/voice/speak", headers=H, json={"text": "नमस्कार", "lang": "mr"})
+assert sp.status_code == 200 and sp.headers["content-type"] == "audio/mpeg" and sp.content == b"ID3mr"
+assert c.post(f"{P}/voice/speak", json={"text": "x", "lang": "mr"}).status_code == 401
+print("bill scan + spoken answers ok")
+os.environ["GROQ_API_KEY"] = ""
+get_settings.cache_clear()
 print("ALL OK")

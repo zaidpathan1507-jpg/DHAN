@@ -5,7 +5,9 @@ the customer's pay page and the reminder scheduler all read one source of truth.
 """
 
 import html
+import json
 import secrets
+from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 
 from pymongo.database import Database
@@ -57,6 +59,12 @@ def paid_of(doc: dict) -> float:
 def outstanding_of(doc: dict) -> float:
     return round(max(0.0, doc["amount"] - paid_of(doc)), 2)
 
+# Marathi reminder wording, generated once by scripts/gen_marathi.py and committed. Without the file, Marathi uses the Hindi text.
+_MR = Path(__file__).with_name("messages_mr.json")
+if _MR.exists():
+    MESSAGES["mr"] = {step: tuple(pair) for step, pair in json.loads(_MR.read_text(encoding="utf-8")).items()}
+
+
 
 def days_overdue(doc: dict, today: date) -> int:
     return 0 if doc.get("paid") else max(0, (today - due_of(doc)).days)
@@ -107,7 +115,7 @@ def serialize(doc: dict, today: date) -> dict:
 
 
 def render_message(doc: dict, business_name: str, step: str, lang: str, today: date) -> tuple[str, str]:
-    subject, body = MESSAGES.get("hi" if lang == "mr" else lang, MESSAGES["en"])[step]
+    subject, body = MESSAGES.get(lang if lang in MESSAGES else "hi" if lang == "mr" else "en", MESSAGES["en"])[step]
     vals = {
         "party": doc["party"], "business": business_name, "amount": f"{outstanding_of(doc):,.0f}", "link": link_of(doc),
         "date": due_of(doc).strftime("%d %b"), "days": days_overdue(doc, today),

@@ -13,7 +13,7 @@ from pymongo.database import Database
 
 from app.core.deps import get_db
 from app.db.session import day, get_business
-from app.services import razorpay_service, udhaar_service as u
+from app.services import pay_service, razorpay_service, udhaar_service as u
 
 public_router = APIRouter(prefix="/public/udhaar", tags=["udhaar-public"])
 webhook_router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -64,9 +64,49 @@ def view(token: str, db: Database = Depends(get_db)):
         "late_fee": u.late_fee_of(doc, today), "paid": doc["paid"],
         "promise_date": doc["promise_date"].date() if doc.get("promise_date") else None,
         "claim": {"amount": doc["claim"]["amount"], "at": doc["claim"]["at"]} if doc.get("claim") else None,
-        "upi_link": u.upi_link(business, doc), "upi_id": business.get("upi_id"), "razorpay_url": doc.get("razorpay_url"),
+        "razorpay": pay_service.mode(), "upi_link": u.upi_link(business, doc), "upi_id": business.get("upi_id"), "razorpay_url": doc.get("razorpay_url"),
         "payments": [{"amount": p["amount"], "at": p["at"]} for p in doc.get("payments", [])],
     }
+
+
+class RzpOrder(BaseModel):
+    amount: float | None = Field(default=None, gt=0)
+
+
+class RzpVerify(BaseModel):
+    razorpay_order_id: str = Field(max_length=60)
+    razorpay_payment_id: str = Field(max_length=60)
+    razorpay_signature: str = Field(max_length=200)
+
+
+class RzpFailed(BaseModel):
+    order_id: str | None = Field(default=None, max_length=60)
+    reason: str = Field(default="declined", max_length=30)
+    detail: str | None = Field(default=None, max_length=200)
+
+
+def _pay(fn, *a):
+    try:
+        return fn(*a)
+    except pay_service.PayError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+
+
+@public_router.post("/{token}/rzp/order")
+def rzp_order(token: str, payload: RzpOrder, db: Database = Depends(get_db)):
+    return _pay(pay_service.create_order, db, _doc(db, token), payload.amount)
+
+
+@public_router.post("/{token}/rzp/verify")
+def rzp_verify(token: str, payload: RzpVerify, db: Database = Depends(get_db)):
+    doc = _doc(db, token)
+    return _pay(pay_service.verify, db, doc, payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature, doc["party"].split(" – ")[0])
+
+
+@public_router.post("/{token}/rzp/failed")
+def rzp_failed(token: str, payload: RzpFailed, db: Database = Depends(get_db)):
+    doc = _doc(db, token)
+    return pay_service.failed(db, doc, payload.order_id, payload.reason, payload.detail, doc["party"].split(" – ")[0])
 
 
 @public_router.post("/{token}/promise")

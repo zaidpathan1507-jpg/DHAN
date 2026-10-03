@@ -7,6 +7,7 @@ import { QUERY_KEYS_TO_REFRESH } from "../../lib/constants.js";
 import { useI18n } from "../../lib/i18n.jsx";
 import Modal from "../common/Modal.jsx";
 import { useToast } from "../common/Toast.jsx";
+import { shrinkImage } from "../../lib/image.js";
 import BillCapture from "../ocr/BillCapture.jsx";
 import OCRProcessing from "../ocr/OCRProcessing.jsx";
 import TransactionForm from "./TransactionForm.jsx";
@@ -63,9 +64,9 @@ export default function AddTransactionModal({ open, onClose }) {
     },
   });
 
-  const handleFileSelected = (file) => {
+  const handleFileSelected = async (file) => {
     setOcrStage("processing");
-    ocrMutation.mutate(file);
+    ocrMutation.mutate(await shrinkImage(file));
   };
 
   const fields = ocrResult?.fields;
@@ -76,6 +77,7 @@ export default function AddTransactionModal({ open, onClose }) {
         category: fields.category?.value,
         txn_date: fields.date?.value,
         gstin: fields.gstin?.value ?? "",
+        payment_mode: fields.payment_mode?.value || undefined,
       }
     : {};
   const confidences = fields

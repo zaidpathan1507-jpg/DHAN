@@ -126,11 +126,11 @@ def fake_post(url, headers=None, json=None, timeout=None):
 
 dhan_ai.requests.post = fake_post
 st = c.get("/api/v1/ai/status", headers=H).json()
-assert st["mode"] == "groq" and st["model"] == "llama-3.3-70b-versatile" and st["stt"] == "whisper"
+assert st["mode"] == "groq" and st["model"] == "openai/gpt-oss-120b" and st["stt"] == "whisper"
 g = ask("how did last week go?")
 assert g["mode"] == "groq" and g["answer"].startswith("Last week net was") and g["blocks"][0]["type"] == "metrics" and g["trace"] == [{"tool": "get_summary", "args": {"period": "7d"}}], g
 url, hdr, body = calls[0]
-assert url == "https://api.groq.com/openai/v1/chat/completions" and hdr["Authorization"] == "Bearer gsk-test" and body["model"] == "llama-3.3-70b-versatile" and body["tools"]
+assert url == "https://api.groq.com/openai/v1/chat/completions" and hdr["Authorization"] == "Bearer gsk-test" and body["model"] == "openai/gpt-oss-120b" and body["tools"]
 assert not any("amount" in str(m) for m in body["messages"] if m["role"] == "user")  # question only; figures arrive via tools
 print("groq mocked ok:", g["answer"])
 

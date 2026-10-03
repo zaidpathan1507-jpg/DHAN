@@ -9,7 +9,7 @@ bearer_scheme = HTTPBearer()
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # POSTs that only read or compute, so a read-only accountant may still use them.
-READ_ONLY_POSTS = {"/api/v1/ai/ask", "/api/v1/voice/transcribe", "/api/v1/notifications/read"}
+READ_ONLY_POSTS = {"/api/v1/ai/ask", "/api/v1/voice/transcribe", "/api/v1/voice/speak", "/api/v1/notifications/read"}
 
 
 def get_db() -> Database:

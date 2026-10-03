@@ -7,12 +7,13 @@ import { enAi, hiAi } from "./strings.ai.js";
 import { enV3, hiV3 } from "./strings.v3.js";
 import { enV4, hiV4 } from "./strings.v4.js";
 import { mr } from "./strings.mr.js";
+import mrGenerated from "./strings.mr.generated.json";
 
 const en = { ...enBase, ...enWow, ...enUd, ...enAi, ...enV3, ...enV4 };
 const hi = { ...hiBase, ...hiWow, ...hiUd, ...hiAi, ...hiV3, ...hiV4 };
 
 // A language missing a key falls back to English (Marathi: Hindi first), never to a raw key.
-const DICTS = { en, hi, mr: { ...hi, ...mr } };
+const DICTS = { en, hi, mr: { ...hi, ...mrGenerated, ...mr } }; // hand-written Marathi wins, then generated, then Hindi
 const LOCALES = { en: "en-IN", hi: "hi-IN", mr: "mr-IN" };
 export const LANGS = ["en", "hi", "mr"];
 const I18nContext = createContext(null);
